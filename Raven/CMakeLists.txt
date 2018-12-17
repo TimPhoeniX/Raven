@@ -18,8 +18,8 @@ set(GAME_SOURCE_FILES main.cpp
 		GameCode/Logics.hpp
 		GameCode/SteeringBehavioursUpdate.cpp
 		GameCode/SteeringBehavioursUpdate.hpp
-		GameCode/ZombieScene.cpp
-		GameCode/ZombieScene.hpp
+		GameCode/RavenScene.cpp
+		GameCode/RavenScene.hpp
 		GameCode/IntroScene.cpp
 		GameCode/IntroScene.hpp)
 
@@ -90,6 +90,10 @@ if (INCLUDE_ENGINE_PROJECT)
 	add_custom_command(TARGET ${PROJECT_NAME}
 			POST_BUILD
 			COMMAND ${CMAKE_COMMAND} -E
+			copy ${GLSL_DIR}/QuadBatchShader.vert ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/)
+	add_custom_command(TARGET ${PROJECT_NAME}
+			POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E
 			copy ${GLSL_DIR}/BatchUVShader.vert ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/)
 
 elseif(COPY_SHADERS)
@@ -111,6 +115,10 @@ elseif(COPY_SHADERS)
 				POST_BUILD
 				COMMAND ${CMAKE_COMMAND} -E
 				copy ${GLSL_DIR}/BatchShader.vert ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/)
+		add_custom_command(TARGET ${PROJECT_NAME}
+				POST_BUILD
+				COMMAND ${CMAKE_COMMAND} -E
+				copy ${GLSL_DIR}/QuadBatchShader.vert ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/)
 		add_custom_command(TARGET ${PROJECT_NAME}
 				POST_BUILD
 				COMMAND ${CMAKE_COMMAND} -E

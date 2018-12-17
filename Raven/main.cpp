@@ -13,7 +13,7 @@
 #include <Game/Director/sge_director.hpp>
 #include <Scene/sge_scene.hpp>
 
-#include "GameCode/ZombieScene.hpp"
+#include "GameCode/RavenScene.hpp"
 #include "GameCode/IntroScene.hpp"
 
 namespace fs = boost::filesystem;
@@ -36,7 +36,7 @@ int main(int argc, char * argv[])
 	game->setGamePath({app_path.string() + '/'});
 	game->setShadersPath({shader_path.string() + '/'});
 
-	ZombieScene* S1 = new ZombieScene(game, "Levels/level1.txt");
+	RavenScene* S1 = new RavenScene(game, "Levels/level1.txt");
 	SGE::Scene* S0 = new IntroScene(S1, "Resources/Textures/zombie-game.png");
 	SGE::Scene* S2 = new EndScene(S1, "Resources/Textures/end-game.png", "Resources/Textures/lost-game.png");
 

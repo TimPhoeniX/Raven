@@ -10,7 +10,7 @@
 #include <Utils/Timing/sge_fps_limiter.hpp>
 #include <Game/Director/sge_director.hpp>
 
-#include "ZombieScene.hpp"
+#include "RavenScene.hpp"
 #include "Utilities.hpp"
 #include "Renderer/SpriteBatch/sge_sprite_batch.hpp"
 #include "IntroScene.hpp"
@@ -269,8 +269,7 @@ bool Aim::aim(b2Vec2 pos, b2Vec2 direction)
 
 	if(hitObject)
 	{
-		ZombieScene::zombieBatch->removeObject(hitObject);
-		ZombieScene::deadZombieBatch->addObject(hitObject);
+		//HitLogic
 		hitObject->setState(MoverState::Dead);
 		hitObject->setLayer(0.2f);
 		this->world->RemoveMover(hitObject);

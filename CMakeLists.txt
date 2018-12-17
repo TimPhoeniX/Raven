@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.7)
-project(Zombie2D)
+project(Raven)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/CMakeModules")
 
@@ -106,7 +106,7 @@ else()
 	set(CMAKE_C_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /O2")
 	set(CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO} /O2")
 
-	set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Zombie2D)
+	set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Raven)
 	link_directories("${CMAKE_CURRENT_BINARY_DIR}/lib")
 endif()
 
@@ -185,4 +185,4 @@ else()
 	endif()
 endif()
 
-add_subdirectory(Zombie2D)
+add_subdirectory(Raven)
