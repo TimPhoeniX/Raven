@@ -19,6 +19,7 @@
 #include "Renderer/SpriteBatch/sge_sprite_batch.hpp"
 #include "Renderer/sge_renderer.hpp"
 #include <allocators>
+#include "QuadBatch.hpp"
 
 bool RavenScene::init()
 {
@@ -54,7 +55,7 @@ void RavenScene::loadScene()
 	std::string rocketPath = "Resources/Textures/pointer.png";
 
 	SGE::RealSpriteBatch* wallBatch = renderer->getBatch(renderer->newBatch(scaleUVProgram, lightBrickTexPath, 4, false, true));
-	SGE::RealSpriteBatch* obstacleBatch = renderer->getBatch(renderer->newBatch(QuadProgram, lightBrickTexPath, 10, false, true));
+	SGE::RealSpriteBatch* obstacleBatch = renderer->getBatch(renderer->newBatch<QuadBatch>(QuadProgram, lightBrickTexPath, 10, false, true));
 	SGE::RealSpriteBatch* beamBatch = renderer->getBatch(renderer->newBatch(basicProgram, beamPath, 5));
 	SGE::RealSpriteBatch* rocketBatch = renderer->getBatch(renderer->newBatch(basicProgram, beamPath, 10));
 	SGE::RealSpriteBatch* botBatch = renderer->getBatch(renderer->newBatch(basicProgram, zombieTexPath, 5));

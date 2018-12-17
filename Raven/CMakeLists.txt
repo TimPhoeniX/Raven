@@ -1,27 +1,29 @@
 set(GAME_SOURCE_FILES main.cpp
 		GameCode/Actions.cpp
 		GameCode/Actions.hpp
-		GameCode/MovingObject.cpp
-		GameCode/MovingObject.hpp
-		GameCode/SteeringBehaviours.cpp
-		GameCode/SteeringBehaviours.hpp
 		GameCode/CellSpacePartition.hpp
-		GameCode/Path.hpp
 		GameCode/Image.hpp
-		GameCode/Wall.hpp
-		GameCode/PlayerMove.hpp
-		GameCode/PlayerMove.cpp
-		GameCode/World.hpp
-		GameCode/World.cpp
-		GameCode/Utilities.hpp
+		GameCode/IntroScene.cpp
+		GameCode/IntroScene.hpp
 		GameCode/Logics.cpp
 		GameCode/Logics.hpp
-		GameCode/SteeringBehavioursUpdate.cpp
-		GameCode/SteeringBehavioursUpdate.hpp
+		GameCode/MovingObject.cpp
+		GameCode/MovingObject.hpp
+		GameCode/Path.hpp
+		GameCode/PlayerMove.cpp
+		GameCode/PlayerMove.hpp
+		GameCode/QuadBatch.cpp
+		GameCode/QuadBatch.hpp
 		GameCode/RavenScene.cpp
 		GameCode/RavenScene.hpp
-		GameCode/IntroScene.cpp
-		GameCode/IntroScene.hpp)
+		GameCode/SteeringBehaviours.cpp
+		GameCode/SteeringBehaviours.hpp
+		GameCode/SteeringBehavioursUpdate.cpp
+		GameCode/SteeringBehavioursUpdate.hpp
+		GameCode/Utilities.hpp
+		GameCode/Wall.hpp
+		GameCode/World.cpp
+		GameCode/World.hpp)
 
 add_executable(${PROJECT_NAME} ${GAME_SOURCE_FILES})
 
