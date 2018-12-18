@@ -20,8 +20,7 @@ GLuint QuadBatch::initializeVAO(GLuint VAO)
 		constexpr GLuint scaleAttrib = 1;
 		constexpr GLuint rotAttrib = 2;
 		constexpr GLuint layerAttrib = 3;
-		constexpr GLuint uvAttrib = 4;
-		constexpr GLuint quadVertices = 5;
+		constexpr GLuint quadVertices = 4;
 		glGenVertexArrays(1, &this->VAO);
 		glBindVertexArray(this->VAO);
 		glBindBuffer(GL_ARRAY_BUFFER, this->SBO);
@@ -38,19 +37,15 @@ GLuint QuadBatch::initializeVAO(GLuint VAO)
 		glEnableVertexAttribArray(layerAttrib);
 		glVertexAttribPointer(layerAttrib, 1, GL_FLOAT, false, sizeof(SpriteQuad), reinterpret_cast<GLvoid*>(offsetof(SpriteQuad, s) + offsetof(SGE::Sprite, layer)));
 		glVertexAttribDivisor(layerAttrib, 1u);
+		auto var1 = (offsetof(SpriteQuad, s) + offsetof(SGE::Sprite, scale));
 		for (GLuint i = 0u; i < 4u; ++i)
 		{
 			glEnableVertexAttribArray(quadVertices + i);
+			auto var = (offsetof(SpriteQuad, q) + i * sizeof(glm::vec2));
 			glVertexAttribPointer(quadVertices + i, 2, GL_FLOAT, false, sizeof(SpriteQuad), reinterpret_cast<GLvoid*>(offsetof(SpriteQuad, q) + i * sizeof(glm::vec2)));
 			glVertexAttribDivisor(quadVertices + i, 1u);
 		}
 
-		if (uvBatch)
-		{
-			glBindBuffer(GL_ARRAY_BUFFER, this->UVBO);
-			glEnableVertexAttribArray(uvAttrib);
-			glVertexAttribPointer(uvAttrib, 2, GL_FLOAT, false, sizeof(glm::vec2), nullptr);
-		}
 		this->samplerLocation = glGetUniformLocation(this->program, "textureSampler");
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, this->texture.id);
@@ -84,7 +79,7 @@ void QuadBatch::prepareBatch()
 		o = batchedObjects[i];
 		if (!o->getDrawable() || !o->getVisible())
 			continue;
-		this->spriteQuads.emplace_back(SGE::Sprite(o->getPositionGLM(), o->getScaleGLM(), o->getOrientation(), o->getLayer()), this->quads[i]);
+		this->spriteQuads.emplace_back(SGE::Sprite(o->getPositionGLM(), { 1.f, 1.f }, o->getOrientation(), o->getLayer()), this->quads[i]);
 	}
 	glBindBuffer(GL_ARRAY_BUFFER, this->SBO);
 	glBufferSubData(GL_ARRAY_BUFFER, 0, this->spriteQuads.size() * sizeof(SpriteQuad), this->spriteQuads.data());

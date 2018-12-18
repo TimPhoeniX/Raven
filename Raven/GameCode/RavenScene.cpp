@@ -59,11 +59,12 @@ void RavenScene::loadScene()
 	SGE::RealSpriteBatch* beamBatch = renderer->getBatch(renderer->newBatch(basicProgram, beamPath, 5));
 	SGE::RealSpriteBatch* rocketBatch = renderer->getBatch(renderer->newBatch(basicProgram, beamPath, 10));
 	SGE::RealSpriteBatch* botBatch = renderer->getBatch(renderer->newBatch(basicProgram, zombieTexPath, 5));
+	QuadBatch* obBatch = dynamic_cast<QuadBatch*>(obstacleBatch);
 
 	GLuint IBO = botBatch->initializeIBO();
 	GLuint sampler = botBatch->initializeSampler();
 
-	for(SGE::RealSpriteBatch* b : {wallBatch,beamBatch,obstacleBatch, rocketBatch})
+	for(SGE::RealSpriteBatch* b : {wallBatch, beamBatch, obstacleBatch, rocketBatch})
 	{
 		b->initializeIBO(IBO);
 		b->initializeSampler(sampler);
@@ -98,6 +99,19 @@ void RavenScene::loadScene()
 	wallBatch->addObject(&world.back());
 	//Boundaries
 
+	//Camera
+	SGE::Camera2d* cam = game->getCamera();
+	cam->setPosition({32.f * Width, 32.f * Height});
+	cam->setCameraScale(0.109f);
+	//Camera
+
+	//Obstacles
+	using Quad = QuadBatch::Quad;
+	Quad q1 = { glm::vec2{64.f, 64.f}, {300.f, 300.f}, {128.f, 400.f}, { 80.f, 128.f } };
+	SGE::Object* obstacle1 = new SGE::WorldElement(Width * .5f, Height * .5f, lightBrickTexPath);
+	obBatch->addObject(obstacle1, q1);
+	obstacle1->setDrawable(true);
+	obstacle1->setVisible(true);
 }
 
 void RavenScene::unloadScene()
