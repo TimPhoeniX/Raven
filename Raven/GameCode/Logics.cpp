@@ -225,6 +225,23 @@ void SnapCamera::performLogic()
 	}
 }
 
+SpectatorCamera::SpectatorCamera(const float speed, const SGE::Key up, const SGE::Key down, const SGE::Key left, const SGE::Key right, SGE::Camera2d* cam)
+	:Logic(SGE::LogicPriority::Low), speed(speed), up(up), down(down), left(left), right(right), cam(cam)
+{
+}
+
+void SpectatorCamera::performLogic()
+{
+	glm::vec2 move = {0, 0};
+	{
+		if(SGE::isPressed(this->up)) move.y += this->speed;
+		if(SGE::isPressed(this->down)) move.y -= this->speed;
+		if(SGE::isPressed(this->right)) move.x += this->speed;
+		if(SGE::isPressed(this->left)) move.x -= this->speed;
+		this->sendAction(new SGE::ACTION::Move(this->cam, move.x, move.y, true));
+	}
+}
+
 Timer::Timer(float time, SGE::Action* action): Logic(SGE::LogicPriority::Low), time(time), action(action)
 {}
 

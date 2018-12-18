@@ -26,8 +26,8 @@ bool RavenScene::init()
 	return true;
 }
 
-constexpr float Width = 100.f;
-constexpr float Height = 100.f;
+constexpr float Width = 80.f;
+constexpr float Height = 60.f;
 constexpr size_t ObstaclesNum = 10u;
 
 RavenScene::RavenScene(SGE::Game* game, const char* path): Scene(), world(Width, Height), game(game),
@@ -63,8 +63,10 @@ void RavenScene::loadScene()
 
 	GLuint IBO = botBatch->initializeIBO();
 	GLuint sampler = botBatch->initializeSampler();
+	obstacleBatch->initializeIBO(IBO);
+	obstacleBatch->initializeSampler(GL_REPEAT, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR);
 
-	for(SGE::RealSpriteBatch* b : {wallBatch, beamBatch, obstacleBatch, rocketBatch})
+	for(SGE::RealSpriteBatch* b : {wallBatch, beamBatch, rocketBatch})
 	{
 		b->initializeIBO(IBO);
 		b->initializeSampler(sampler);
@@ -102,16 +104,21 @@ void RavenScene::loadScene()
 	//Camera
 	SGE::Camera2d* cam = game->getCamera();
 	cam->setPosition({32.f * Width, 32.f * Height});
-	cam->setCameraScale(0.109f);
+	cam->setCameraScale(0.18f);
+	this->addLogic(new SpectatorCamera(10, SGE::Key::W, SGE::Key::S, SGE::Key::A, SGE::Key::D, cam));
+	this->addLogic(new SGE::Logics::CameraZoom(cam, 0.5f, 1.f, 0.178f, SGE::Key::Q, SGE::Key::E));
 	//Camera
 
 	//Obstacles
 	using Quad = QuadBatch::Quad;
-	Quad q1 = { glm::vec2{64.f, 64.f}, {300.f, 300.f}, {128.f, 400.f}, { 80.f, 128.f } };
+	Quad q1 = { 4.f * glm::vec2{-64.f, -64.f}, 4.f * glm::vec2{300.f, -300.f}, 4.f * glm::vec2{128.f, 400.f}, 4.f * glm::vec2{ -80.f, 128.f } };
 	SGE::Object* obstacle1 = new SGE::WorldElement(Width * .5f, Height * .5f, lightBrickTexPath);
+	SGE::Object* obstacle2 = new SGE::WorldElement(Width * .5f + 10.f, Height * .5f, lightBrickTexPath);
 	obBatch->addObject(obstacle1, q1);
+	obBatch->addObject(obstacle2, q1);
 	obstacle1->setDrawable(true);
 	obstacle1->setVisible(true);
+	obstacle1->setOrientation(b2_pi*0.5f);
 }
 
 void RavenScene::unloadScene()
