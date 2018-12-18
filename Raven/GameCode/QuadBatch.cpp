@@ -16,11 +16,11 @@ GLuint QuadBatch::initializeVAO(GLuint VAO)
 	}
 	else
 	{
-		constexpr GLuint posAttrib = 0;
-		constexpr GLuint scaleAttrib = 1;
-		constexpr GLuint rotAttrib = 2;
-		constexpr GLuint layerAttrib = 3;
-		constexpr GLuint quadVertices = 4;
+		constexpr GLuint posAttrib = 0u;
+		constexpr GLuint scaleAttrib = 1u;
+		constexpr GLuint rotAttrib = 2u;
+		constexpr GLuint layerAttrib = 3u;
+		constexpr GLuint quadVertices = 4u;
 		glGenVertexArrays(1, &this->VAO);
 		glBindVertexArray(this->VAO);
 		glBindBuffer(GL_ARRAY_BUFFER, this->SBO);
@@ -37,11 +37,9 @@ GLuint QuadBatch::initializeVAO(GLuint VAO)
 		glEnableVertexAttribArray(layerAttrib);
 		glVertexAttribPointer(layerAttrib, 1, GL_FLOAT, false, sizeof(SpriteQuad), reinterpret_cast<GLvoid*>(offsetof(SpriteQuad, s) + offsetof(SGE::Sprite, layer)));
 		glVertexAttribDivisor(layerAttrib, 1u);
-		auto var1 = (offsetof(SpriteQuad, s) + offsetof(SGE::Sprite, scale));
 		for (GLuint i = 0u; i < 4u; ++i)
 		{
 			glEnableVertexAttribArray(quadVertices + i);
-			auto var = (offsetof(SpriteQuad, q) + i * sizeof(glm::vec2));
 			glVertexAttribPointer(quadVertices + i, 2, GL_FLOAT, false, sizeof(SpriteQuad), reinterpret_cast<GLvoid*>(offsetof(SpriteQuad, q) + i * sizeof(glm::vec2)));
 			glVertexAttribDivisor(quadVertices + i, 1u);
 		}
