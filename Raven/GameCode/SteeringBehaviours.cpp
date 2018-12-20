@@ -202,7 +202,7 @@ b2Vec2 SteeringBehaviours::WallAvoidance()
 	this->CreateFeelers();
 	float distToIp = 0.f;
 	float closestDistToIp = std::numeric_limits<float>::max();
-	Wall closestWall;
+	Wall closestWall = { b2Vec2_zero, b2Vec2_zero, Wall::WallEdge::Invalid };
 	b2Vec2 sForce = b2Vec2_zero;
 	b2Vec2 point = b2Vec2_zero;
 	b2Vec2 closestPoint = b2Vec2_zero;
