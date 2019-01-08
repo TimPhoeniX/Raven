@@ -15,6 +15,7 @@ class World
 protected:
 	CellSpacePartition<MovingObject, partitionX, partitionY> movers;
 	CellSpacePartition<SGE::Object, partitionX, partitionY> obstacles;
+	CellSpacePartition<SGE::Object, partitionX, partitionY> items;
 	std::vector<std::pair<SGE::Object*, Wall>> walls;
 	const float width, height, cellWidth, cellHeight;
 public:

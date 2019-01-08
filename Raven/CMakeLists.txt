@@ -14,6 +14,8 @@ set(GAME_SOURCE_FILES main.cpp
 		GameCode/PlayerMove.hpp
 		GameCode/QuadBatch.cpp
 		GameCode/QuadBatch.hpp
+		GameCode/QuadObject.cpp
+		GameCode/QuadObject.hpp
 		GameCode/RavenScene.cpp
 		GameCode/RavenScene.hpp
 		GameCode/SteeringBehaviours.cpp

@@ -3,6 +3,8 @@
 #include <vector>
 #include <array>
 #include <set>
+#include "Utilities.hpp"
+#include "QuadObject.hpp"
 
 namespace
 {
@@ -12,37 +14,6 @@ namespace
 		v.erase(std::remove(v.begin(), v.end(), e), v.end());
 	}
 }
-
-struct AABB
-{
-	b2Vec2 low = b2Vec2_zero;
-	b2Vec2 high = b2Vec2_zero;
-	inline bool isOverlapping(const AABB& other) const
-	{
-		return !((other.high.y < this->low.y)
-				 || (other.low.y > this->high.y)
-				 || (other.low.x > this->high.x)
-				 || (other.high.x < this->low.x));
-	}
-	inline b2Vec2 UpperLeft() const
-	{
-		return {this->low.x, this->high.y};
-	}
-	inline b2Vec2 UpperRight() const
-	{
-		return this->high;
-	}
-	inline b2Vec2 LowerLeft() const
-	{
-		return this->low;
-	}
-	inline b2Vec2 LowerRight() const
-	{
-		return {this->high.x, this->low.y};
-	}
-	AABB() = default;
-	inline AABB(b2Vec2 low, b2Vec2 high): low(low), high(high){}
-};
 
 template<typename T>
 struct Cell
@@ -120,7 +91,7 @@ class CellSpacePartition
 		}
 		iterator end()
 		{
-			return iterator(beginX, endY+1u, this);
+			return iterator(beginX, endY + 1u, this);
 		}
 	};
 	std::array<Cell<T>, X*Y> cells;
@@ -169,7 +140,7 @@ public:
 		}*/
 		std::set<T*> setOfNeighbours;
 		AABBQuery list(this, query);
-		for(size_t it: list)
+		for(size_t it : list)
 		{
 			auto& cell = this->cells[it];
 			if(!cell.Entities.empty() && cell.aabb.isOverlapping(query))
@@ -195,16 +166,27 @@ public:
 
 	static AABB getAABB(T* e)
 	{
+		if(e->getShape()->getType() == SGE::ShapeType::Quad)
+		{
+			QuadObstacle* qob = reinterpret_cast<QuadObstacle*>(e);
+			return qob->getAABB();
+		}
 		return getAABB(e->getPosition(), e->getShape()->getWidth(), e->getShape()->getHeight());
 	}
 
 	static AABB getAABB(T* e, b2Vec2 position)
 	{
+		if(e->getShape()->getType() == SGE::ShapeType::Quad)
+		{
+			QuadObstacle* qob = reinterpret_cast<QuadObstacle*>(e);
+			return qob->getAABB();
+		}
 		return getAABB(position, e->getShape()->getWidth(), e->getShape()->getHeight());
 	}
-	static AABB getAABB(b2Vec2 position,float width, float height)
+
+	static AABB getAABB(b2Vec2 position, float width, float height)
 	{
-		AABB aabb(position,position);
+		AABB aabb(position, position);
 		b2Vec2 extent = {width * 0.5f, height * 0.5f};
 		aabb.low -= extent;
 		aabb.high += extent;
@@ -214,7 +196,7 @@ public:
 	void AddEntity(T* e)
 	{
 		if(!e) return;
-		for(size_t index : AABBQuery(this,this->getAABB(e)))
+		for(size_t index : AABBQuery(this, this->getAABB(e)))
 		{
 			this->cells[index].Entities.push_back(e);
 		}
@@ -222,7 +204,7 @@ public:
 
 	void UpdateEntity(T* e, b2Vec2 oldPos)
 	{
-		AABBQuery Old(this,getAABB(e, oldPos)), New(this,getAABB(e));
+		AABBQuery Old(this, getAABB(e, oldPos)), New(this, getAABB(e));
 		auto s1 = Old.begin(), e1 = Old.end(), s2 = New.begin(), e2 = New.end();
 		while(s1 != e1)
 		{

@@ -1,4 +1,38 @@
 #pragma once
+#include <Object/Shape/sge_shape.hpp>
+#include <Box2D/Common/b2Math.h>
+
+struct AABB
+{
+	b2Vec2 low = b2Vec2{std::numeric_limits<float>::max(), std::numeric_limits<float>::max()};
+	b2Vec2 high = b2Vec2{std::numeric_limits<float>::min(), std::numeric_limits<float>::min()};
+	inline bool isOverlapping(const AABB& other) const
+	{
+		return !((other.high.y < this->low.y)
+				 || (other.low.y > this->high.y)
+				 || (other.low.x > this->high.x)
+				 || (other.high.x < this->low.x));
+	}
+	inline b2Vec2 UpperLeft() const
+	{
+		return{this->low.x, this->high.y};
+	}
+	inline b2Vec2 UpperRight() const
+	{
+		return this->high;
+	}
+	inline b2Vec2 LowerLeft() const
+	{
+		return this->low;
+	}
+	inline b2Vec2 LowerRight() const
+	{
+		return{this->high.x, this->low.y};
+	}
+	AABB() = default;
+	inline AABB(b2Vec2 low, b2Vec2 high): low(low), high(high)
+	{}
+};
 
 inline SGE::Shape* getCircle()
 {

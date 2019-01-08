@@ -20,6 +20,7 @@
 #include "Renderer/sge_renderer.hpp"
 #include <allocators>
 #include "QuadBatch.hpp"
+#include "QuadObject.hpp"
 
 bool RavenScene::init()
 {
@@ -59,7 +60,10 @@ void RavenScene::loadScene()
 	SGE::RealSpriteBatch* beamBatch = renderer->getBatch(renderer->newBatch(basicProgram, beamPath, 5));
 	SGE::RealSpriteBatch* rocketBatch = renderer->getBatch(renderer->newBatch(basicProgram, beamPath, 10));
 	SGE::RealSpriteBatch* botBatch = renderer->getBatch(renderer->newBatch(basicProgram, zombieTexPath, 5));
+	SGE::RealSpriteBatch* graphTestBatch = renderer->getBatch(renderer->newBatch(basicProgram, zombieTexPath, size_t(Width*Height)));
 	QuadBatch* obBatch = dynamic_cast<QuadBatch*>(obstacleBatch);
+	if(!obBatch)
+		throw std::runtime_error("QuadBatch cast failed!");
 
 	GLuint IBO = botBatch->initializeIBO();
 	GLuint sampler = botBatch->initializeSampler();
@@ -112,13 +116,12 @@ void RavenScene::loadScene()
 	//Obstacles
 	using Quad = QuadBatch::Quad;
 	Quad q1 = { 4.f * glm::vec2{-64.f, -64.f}, 4.f * glm::vec2{300.f, -300.f}, 4.f * glm::vec2{128.f, 400.f}, 4.f * glm::vec2{ -80.f, 128.f } };
-	SGE::Object* obstacle1 = new SGE::WorldElement(Width * .5f, Height * .5f, lightBrickTexPath);
-	SGE::Object* obstacle2 = new SGE::WorldElement(Width * .5f + 10.f, Height * .5f, lightBrickTexPath);
+	SGE::Object* obstacle1 = new QuadObstacle(Width * .5f, Height * .5f, 0.f, q1);
+	SGE::Object* obstacle2 = new QuadObstacle(Width * .5f + 10.f, Height * .5f, b2_pi*0.5f, q1);
 	obBatch->addObject(obstacle1, q1);
 	obBatch->addObject(obstacle2, q1);
 	obstacle1->setDrawable(true);
 	obstacle1->setVisible(true);
-	obstacle1->setOrientation(b2_pi*0.5f);
 }
 
 void RavenScene::unloadScene()
