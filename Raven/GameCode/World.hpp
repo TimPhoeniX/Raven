@@ -51,6 +51,8 @@ public:
 
 	std::vector<SGE::Object*> getObstacles(MovingObject* const mover);
 
+	std::vector<SGE::Object*> getObstacles(b2Vec2 position, float radius);
+
 	void getNeighbours(std::vector<MovingObject*>& res, MovingObject* const mover);
 
 	void getNeighbours(std::vector<MovingObject*>& res, MovingObject* const mover, float radius);

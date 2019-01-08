@@ -31,7 +31,7 @@ constexpr float Width = 80.f;
 constexpr float Height = 60.f;
 constexpr size_t ObstaclesNum = 10u;
 
-RavenScene::RavenScene(SGE::Game* game, const char* path): Scene(), world(Width, Height), game(game),
+RavenScene::RavenScene(SGE::Game* game, const char* path) : Scene(), world(Width, Height), game(game),
 path([game](const char* path)
 {
 	return game->getGamePath() + path;
@@ -39,6 +39,25 @@ path([game](const char* path)
 {
 	static bool initialized = init();
 }
+
+struct GridCell
+{
+	enum State
+	{
+		Accepted,
+		Untested,
+		Invalid
+	};
+	State state = State::Untested;
+	SGE::Object* dummy = nullptr;
+};
+
+class GraphCellDummy: public SGE::Object
+{
+public:
+	GraphCellDummy(size_t x, size_t y) : Object(0.5f + x, 0.5f + y, true, getCircle()){}
+	GraphCellDummy(b2Vec2 pos) : Object(pos.x, pos.y, true, getCircle()) {}
+};
 
 void RavenScene::loadScene()
 {
@@ -62,7 +81,7 @@ void RavenScene::loadScene()
 	SGE::RealSpriteBatch* botBatch = renderer->getBatch(renderer->newBatch(basicProgram, zombieTexPath, 5));
 	SGE::RealSpriteBatch* graphTestBatch = renderer->getBatch(renderer->newBatch(basicProgram, zombieTexPath, size_t(Width*Height)));
 	QuadBatch* obBatch = dynamic_cast<QuadBatch*>(obstacleBatch);
-	if(!obBatch)
+	if (!obBatch)
 		throw std::runtime_error("QuadBatch cast failed!");
 
 	GLuint IBO = botBatch->initializeIBO();
@@ -70,7 +89,7 @@ void RavenScene::loadScene()
 	obstacleBatch->initializeIBO(IBO);
 	obstacleBatch->initializeSampler(GL_REPEAT, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR);
 
-	for(SGE::RealSpriteBatch* b : {wallBatch, beamBatch, rocketBatch})
+	for (SGE::RealSpriteBatch* b : { wallBatch, beamBatch, rocketBatch })
 	{
 		b->initializeIBO(IBO);
 		b->initializeSampler(sampler);
@@ -107,7 +126,7 @@ void RavenScene::loadScene()
 
 	//Camera
 	SGE::Camera2d* cam = game->getCamera();
-	cam->setPosition({32.f * Width, 32.f * Height});
+	cam->setPosition({ 32.f * Width, 32.f * Height });
 	cam->setCameraScale(0.18f);
 	this->addLogic(new SpectatorCamera(10, SGE::Key::W, SGE::Key::S, SGE::Key::A, SGE::Key::D, cam));
 	this->addLogic(new SGE::Logics::CameraZoom(cam, 0.5f, 1.f, 0.178f, SGE::Key::Q, SGE::Key::E));
@@ -120,8 +139,67 @@ void RavenScene::loadScene()
 	SGE::Object* obstacle2 = new QuadObstacle(Width * .5f + 10.f, Height * .5f, b2_pi*0.5f, q1);
 	obBatch->addObject(obstacle1, q1);
 	obBatch->addObject(obstacle2, q1);
-	obstacle1->setDrawable(true);
-	obstacle1->setVisible(true);
+	this->world.AddObstacle(obstacle1);
+	this->world.AddObstacle(obstacle2);
+
+	//Grid
+	constexpr size_t X = size_t(Width);
+	constexpr size_t Y = size_t(Height);
+	std::vector<SGE::Object*> obstacles;
+	size_t x = 0u, y = 0u;
+	GridCell::State gs = GridCell::Accepted;
+	int intersections = 0;
+	for(x = 0u; x < X; ++x)
+	{
+		for(y = 0u; y < Y; ++y)
+		{
+			b2Vec2 pos = b2Vec2{ 0.5f + x, 0.5f + y };
+			obstacles = std::move(this->world.getObstacles(pos, 1.f));
+			for(SGE::Object* o : obstacles)
+			{
+				QuadObstacle* qo = dynamic_cast<QuadObstacle*>(o);
+				if (!qo) continue;
+				for(Edge edge : qo->getEdges())
+				{
+					b2Vec2 radius = -edge.Normal();
+					radius *= 0.5f;
+					float dist;
+					b2Vec2 intersection;
+					if(LineIntersection(pos, pos + radius, edge.To(), edge.From(), dist, intersection))
+					{
+						gs = GridCell::Invalid;
+						break;
+					}
+					if(LineIntersection(pos, pos + b2Vec2{100.f, 0.f}, edge.To(), edge.From(), dist, intersection))
+					{
+						++intersections;
+					}
+				}
+				if (gs == GridCell::Invalid && 1 == intersections % 2)
+					break;
+			}
+			auto stateToString = [](GridCell::State s)-> std::string
+			{
+				switch (s)
+				{
+				case GridCell::Accepted: return "Accepted";
+				case GridCell::Untested: return "Untested";
+				case GridCell::Invalid: return "Invalid";
+				default: return "NAS";
+				}
+			};
+			if(gs == GridCell::Accepted && 0 == intersections % 2)
+			{
+				graphTestBatch->addObject(new GraphCellDummy(x, y));
+			}
+			else
+			{
+				std::cout << "Failed X: " << x << ':' << y << ' ' << stateToString(gs) << " intersections: " << intersections << std::endl;
+			}
+			gs = GridCell::Accepted;
+			intersections = 0;
+		}
+	}
 }
 
 void RavenScene::unloadScene()
@@ -137,7 +215,7 @@ RavenScene::~RavenScene()
 template<typename Vec>
 void vec_clear(Vec& vec)
 {
-	for(auto h : vec)
+	for (auto h : vec)
 	{
 		delete h;
 	}

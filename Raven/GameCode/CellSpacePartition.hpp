@@ -140,6 +140,7 @@ public:
 		}*/
 		std::set<T*> setOfNeighbours;
 		AABBQuery list(this, query);
+		float radiusSum = 0.f;
 		for(size_t it : list)
 		{
 			auto& cell = this->cells[it];
@@ -147,7 +148,8 @@ public:
 			{
 				for(T* en : cell.Entities)
 				{
-					if(b2DistanceSquared(en->getPosition(), pos) < radius*radius)
+					radiusSum = radius + en->getShape()->getRadius();
+					if(b2DistanceSquared(en->getPosition(), pos) < radiusSum*radiusSum)
 					{
 						setOfNeighbours.insert(en);
 					}

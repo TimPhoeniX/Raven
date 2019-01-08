@@ -2,6 +2,8 @@
 
 QuadObstacle::QuadObstacle(b2Vec2 pos, float rotation, std::array<b2Vec2, 4> vertices): Object(pos, true), vertices(vertices)
 {
+	this->visible = true;
+	this->drawable = true;
 	this->orientation = rotation;
 	float radius = 0.f;
 	b2Vec2 far;
@@ -33,4 +35,9 @@ QuadObstacle::QuadObstacle(float x, float y, float rotation, std::array<b2Vec2, 
 AABB QuadObstacle::getAABB() const
 {
 	return this->aabbCache;
+}
+
+const std::array<Edge, 4>& QuadObstacle::getEdges() const
+{
+	return this->edges;
 }

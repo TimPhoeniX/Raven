@@ -3,6 +3,7 @@
 #include <array>
 #include "Wall.hpp"
 #include "Utilities.hpp"
+#include <algorithm>
 
 class QuadObstacle : public SGE::Object
 {
@@ -25,4 +26,5 @@ public:
 	{}
 
 	AABB getAABB() const;
+	const std::array<Edge, 4>& getEdges() const;
 };

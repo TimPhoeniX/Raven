@@ -57,7 +57,7 @@ inline bool LineIntersection(b2Vec2 a, b2Vec2 b,
 	float invDet = 1.f / det;
 	float s = ((a.y - c.y) * (d.x - c.x) - (a.x - c.x)*(d.y - c.y)) * invDet;
 	float t = ((a.y - c.y) * (b.x - a.x) - (a.x - c.x)*(b.y - a.y)) * invDet;
-	if(s > 0.f && s < 1.f && s > 0 && s < 1)
+	if(s > 0.f && s < 1.f && t > 0.f && t < 1.f)
 	{
 		distToIp = b2Distance(a, b) * s;
 		point = a + s * (b - a);

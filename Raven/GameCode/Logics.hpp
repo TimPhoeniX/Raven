@@ -173,4 +173,5 @@ public:
 	WinCondition(size_t& zombies, size_t& killedZombies, SGE::Scene* endGame, Player* player);
 	virtual void performLogic() override;
 };
+
 #endif

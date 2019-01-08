@@ -2,7 +2,7 @@
 #include "Utilities.hpp"
 
 World::World(float width, float height)
-	: movers(width, height), obstacles(width, height), walls(),
+	: movers(width, height), obstacles(width, height), items(width, height), walls(),
 	width(width), height(height), cellWidth(width / partitionX), cellHeight(height / partitionY)
 {
 	walls.reserve(4);
@@ -10,15 +10,20 @@ World::World(float width, float height)
 
 std::vector<SGE::Object*> World::getObstacles(MovingObject* const mover, float radius)
 {
-	std::vector<SGE::Object*> obs;
-	obs.reserve(5u);
-	this->obstacles.CalculateNeighbours(obs, mover->getPosition(), radius);
-	return obs;
+	return this->getObstacles(mover->getPosition(), radius);
 }
 
 std::vector<SGE::Object*> World::getObstacles(MovingObject* const mover)
 {
-	return this->getObstacles(mover, 10.f);
+	return this->getObstacles(mover->getPosition(), 10.f);
+}
+
+std::vector<SGE::Object*> World::getObstacles(b2Vec2 position, float radius)
+{
+	std::vector<SGE::Object*> obs;
+	obs.reserve(5u);
+	this->obstacles.CalculateNeighbours(obs, position, radius);
+	return obs;
 }
 
 void World::getNeighbours(std::vector<MovingObject*>& res, MovingObject* const mover)
