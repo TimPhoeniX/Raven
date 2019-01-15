@@ -1,5 +1,5 @@
 #include "SteeringBehaviours.hpp"
-#include "MovingObject.hpp"
+#include "RavenBot.hpp"
 #include <random>
 #include <functional>
 #include <vector>
@@ -8,9 +8,9 @@
 #include "Wall.hpp"
 #include "Utils/Timing/sge_fps_limiter.hpp"
 
-SteeringBehaviours::SteeringBehaviours(MovingObject* owner): owner(owner)
+SteeringBehaviours::SteeringBehaviours(RavenBot* owner): owner(owner)
 {
-	this->neighbours.reserve(10u);
+	this->neighbours.reserve(5u);
 }
 
 
@@ -21,10 +21,10 @@ b2Vec2 SteeringBehaviours::CalculateForce()
 {
 	constexpr float alone_time_max = 15.f;
 	constexpr float wander_time_max = 15.f;
-	float distCoef = b2Clamp(b2Distance(this->player->getPosition(), this->owner->getPosition()), 10.f, 100.f);
+	float distCoef = b2Clamp(b2Distance(this->enemy->getPosition(), this->owner->getPosition()), 10.f, 100.f);
 	distCoef = 1.f + (100.f - distCoef) * 0.05f;
 	if(((this->total_space_time += SGE::delta_time) > 240.f))
-		this->owner->setState(MoverState::Attacking);
+		this->owner->setState(BotState::Attacking);
 
 	b2Vec2 sForce = b2Vec2_zero;
 	sForce += 1.0f * this->WallAvoidance();
@@ -34,10 +34,10 @@ b2Vec2 SteeringBehaviours::CalculateForce()
 	this->owner->getWorld()->getNeighbours(this->neighbours, this->owner, 5.f);
 	if(this->neighbours.size() >= 5u)
 	{
-		this->owner->setState(MoverState::Attacking);
+		this->owner->setState(BotState::Attacking);
 		for(auto element : this->neighbours)
 		{
-			element->setState(MoverState::Attacking);
+			element->setState(BotState::Attacking);
 		}
 	}
 	else
@@ -50,28 +50,28 @@ b2Vec2 SteeringBehaviours::CalculateForce()
 		sForce += 1.f * this->Cohesion(this->neighbours);
 		sForce += 1.5f * this->Alignment(this->neighbours);
 		sForce += 2.f * this->Separation(this->neighbours);
-		sForce += 2.f * this->Pursuit(this->player);
+		sForce += 2.f * this->Pursuit(this->enemy);
 	}
 	else
 	{
-		if(this->owner->IsMoving())
+		if(this->owner->IsWandering())
 		{
 			sForce += 2.5f * this->Wander();
-			sForce += 2.5f * this->Hide(this->player, true, &obstacle);
+			sForce += 2.5f * this->Hide(this->enemy, true, &obstacle);
 			if(this->alone_time * distCoef > (alone_time_max + wander_time_max))
 			{
 				this->alone_time = 0.f;
-				this->owner->setState(MoverState::Hiding);
+				this->owner->setState(BotState::Wandering);
 				this->obstacle = nullptr;
 			}
 		}
 		else
 		{
-			sForce += 2.f * this->Hide(this->player);
+			sForce += 2.f * this->Hide(this->enemy);
 			if(this->alone_time * distCoef > (alone_time_max))
 			{
 				this->alone_time = 0.f;
-				this->owner->setState(MoverState::Moving);
+				this->owner->setState(BotState::Wandering);
 			}
 		}
 		sForce += 1.f * this->Separation(this->neighbours);
@@ -114,7 +114,7 @@ b2Vec2 SteeringBehaviours::Arrive(b2Vec2 target, Deceleration dec) const
 	return b2Vec2_zero;
 }
 
-b2Vec2 SteeringBehaviours::Pursuit(const MovingObject* const evader) const
+b2Vec2 SteeringBehaviours::Pursuit(const RavenBot* const evader) const
 {
 	b2Vec2 toEvader = evader->getPosition() - owner->getPosition();
 	float relHead = b2Dot(owner->getHeading(), evader->getHeading());
@@ -126,7 +126,7 @@ b2Vec2 SteeringBehaviours::Pursuit(const MovingObject* const evader) const
 	return this->Seek(evader->getPosition() + lookAhead * evader->getVelocity());
 }
 
-b2Vec2 SteeringBehaviours::Evade(const MovingObject* const pursuer) const
+b2Vec2 SteeringBehaviours::Evade(const RavenBot* const pursuer) const
 {
 	b2Vec2 toPursuer = pursuer->getPosition() - owner->getPosition();
 	float lookAhead = toPursuer.Length() / (owner->getMaxSpeed() + pursuer->getSpeed());
@@ -158,21 +158,43 @@ b2Vec2 SteeringBehaviours::ObstacleAvoidance()
 	b2Vec2 closestLocalPos = b2Vec2_zero;
 	for(SGE::Object* ob : obstacles)
 	{
-		b2Vec2 localPos = PointToLocalSpace(ob->getPosition(), owner->getHeading(), owner->getPosition());
-		if(localPos.x >= 0)
+		if(ob->getShape()->getType() != SGE::ShapeType::Quad)
 		{
-			float expRadius = owner->getShape()->getRadius() + ob->getShape()->getRadius();
-			if(b2Abs(localPos.y) < expRadius)
+			b2Vec2 localPos = PointToLocalSpace(ob->getPosition(), owner->getHeading(), owner->getPosition());
+			if(localPos.x >= 0)
 			{
-				float cX = localPos.x, cY = localPos.y;
-				float sqrtPart = sqrt(expRadius*expRadius - cY*cY);
-				float ip = cX - sqrtPart;
-				if(ip <= 0.f) ip = cX + sqrtPart;
-				if(ip < closestDist)
+				float expRadius = owner->getShape()->getRadius() + ob->getShape()->getRadius();
+				if(b2Abs(localPos.y) < expRadius)
 				{
-					closestDist = ip;
-					closestObject = ob;
-					closestLocalPos = localPos;
+					float cX = localPos.x, cY = localPos.y;
+					float sqrtPart = sqrt(expRadius*expRadius - cY*cY);
+					float ip = cX - sqrtPart;
+					if(ip <= 0.f) ip = cX + sqrtPart;
+					if(ip < closestDist)
+					{
+						closestDist = ip;
+						closestObject = ob;
+						closestLocalPos = localPos;
+					}
+				}
+			}
+		}
+		else
+		{
+			QuadObstacle* qob = reinterpret_cast<QuadObstacle*>(ob);
+			float ip;
+			b2Vec2 point;
+			for(auto& wall : qob->getEdges())
+			{
+				if(LineIntersection(owner->getPosition(), boxLength * owner->getHeading(),
+									wall.From(), wall.To(), ip, point))
+				{
+					if(ip < closestDist)
+					{
+						closestDist = ip;
+						closestObject = qob;
+						closestLocalPos = PointToLocalSpace(point, this->owner->getHeading(), this->owner->getPosition());
+					}
 				}
 			}
 		}
@@ -197,23 +219,22 @@ void SteeringBehaviours::CreateFeelers()
 	this->feelers[2] = owner->getPosition() + 3.f * temp;
 }
 
-b2Vec2 SteeringBehaviours::WallAvoidance()
+b2Vec2 SteeringBehaviours::WallAvoidanceImp(std::vector<std::pair<SGE::Object*, Edge>>& walls)
 {
 	this->CreateFeelers();
 	float distToIp = 0.f;
 	float closestDistToIp = std::numeric_limits<float>::max();
-	Wall closestWall = { b2Vec2_zero, b2Vec2_zero, Wall::WallEdge::Invalid };
+	Edge closestWall = { b2Vec2_zero, b2Vec2_zero };
 	b2Vec2 sForce = b2Vec2_zero;
 	b2Vec2 point = b2Vec2_zero;
 	b2Vec2 closestPoint = b2Vec2_zero;
-	std::vector<std::pair<SGE::Object*, Wall>>& walls = owner->getWorld()->getWalls();
 	for(b2Vec2 feeler : this->feelers)
 	{
 		for(auto& wall : walls)
 		{
 			if(LineIntersection(owner->getPosition(), feeler,
-								wall.second.From(), wall.second.To(),
-								distToIp, point))
+			                    wall.second.From(), wall.second.To(),
+			                    distToIp, point))
 			{
 				if(distToIp < closestDistToIp)
 				{
@@ -232,7 +253,13 @@ b2Vec2 SteeringBehaviours::WallAvoidance()
 	return sForce;
 }
 
-b2Vec2 SteeringBehaviours::Interpose(const MovingObject* const aA, const MovingObject* const aB) const
+b2Vec2 SteeringBehaviours::WallAvoidance()
+{
+	std::vector<std::pair<SGE::Object*, Edge>>& walls = owner->getWorld()->getWalls();
+	return WallAvoidanceImp(walls);
+}
+
+b2Vec2 SteeringBehaviours::Interpose(const RavenBot* const aA, const RavenBot* const aB) const
 {
 	b2Vec2 midPoint = 0.5*(aA->getPosition() + aB->getPosition());
 	float eta = b2Distance(owner->getPosition(), midPoint) / owner->getMaxSpeed();
@@ -251,7 +278,7 @@ b2Vec2 SteeringBehaviours::GetHidingSpot(const b2Vec2& obPos, float obRadius, b2
 	return distAway * toOb + obPos;
 }
 
-b2Vec2 SteeringBehaviours::Hide(const MovingObject* const target, bool runaway, const SGE::Object** object) const
+b2Vec2 SteeringBehaviours::Hide(const RavenBot* const target, bool runaway, const SGE::Object** object) const
 {
 	float closestDist = !runaway ? std::numeric_limits<float>::max() : 0.f;
 	b2Vec2 bestSpot = b2Vec2_zero;
@@ -299,7 +326,7 @@ b2Vec2 SteeringBehaviours::FollowPath()
 	}
 }
 
-b2Vec2 SteeringBehaviours::OffsetPursuit(const MovingObject* const leader, b2Vec2 offset) const
+b2Vec2 SteeringBehaviours::OffsetPursuit(const RavenBot* const leader, b2Vec2 offset) const
 {
 	b2Vec2 worldOffset = PointToWorldSpace(offset, leader->getHeading(), leader->getPosition());
 	b2Vec2 toOffset = worldOffset - owner->getPosition();
@@ -307,10 +334,10 @@ b2Vec2 SteeringBehaviours::OffsetPursuit(const MovingObject* const leader, b2Vec
 	return Arrive(worldOffset + lookAhead * leader->getVelocity(), Deceleration::fast);
 }
 
-b2Vec2 SteeringBehaviours::Separation(const std::vector<MovingObject*>& neighbours) const
+b2Vec2 SteeringBehaviours::Separation(const std::vector<RavenBot*>& neighbours) const
 {
 	b2Vec2 sForce = b2Vec2_zero;
-	for(MovingObject* neighbour : neighbours)
+	for(RavenBot* neighbour : neighbours)
 	{
 		b2Vec2 toAgent = owner->getPosition() - neighbour->getPosition();
 		float len = toAgent.Normalize();
@@ -319,10 +346,10 @@ b2Vec2 SteeringBehaviours::Separation(const std::vector<MovingObject*>& neighbou
 	return sForce;
 }
 
-b2Vec2 SteeringBehaviours::Alignment(const std::vector<MovingObject*>& neighbours) const
+b2Vec2 SteeringBehaviours::Alignment(const std::vector<RavenBot*>& neighbours) const
 {
 	b2Vec2 avgHeading = b2Vec2_zero;
-	for(MovingObject* neighbour : neighbours)
+	for(RavenBot* neighbour : neighbours)
 	{
 		avgHeading += neighbour->getHeading();
 	}
@@ -334,10 +361,10 @@ b2Vec2 SteeringBehaviours::Alignment(const std::vector<MovingObject*>& neighbour
 	return avgHeading;
 }
 
-b2Vec2 SteeringBehaviours::Cohesion(const std::vector<MovingObject*>& neighbours) const
+b2Vec2 SteeringBehaviours::Cohesion(const std::vector<RavenBot*>& neighbours) const
 {
 	b2Vec2 massCenter = b2Vec2_zero, sForce = b2Vec2_zero;
-	for(MovingObject* neighbour : neighbours)
+	for(RavenBot* neighbour : neighbours)
 	{
 		massCenter += neighbour->getPosition();
 	}
@@ -347,4 +374,9 @@ b2Vec2 SteeringBehaviours::Cohesion(const std::vector<MovingObject*>& neighbours
 		sForce = this->Seek(massCenter);
 	}
 	return sForce;
+}
+
+b2Vec2 RavenSteering::CalculateForce()
+{
+	return this->FollowPath();
 }

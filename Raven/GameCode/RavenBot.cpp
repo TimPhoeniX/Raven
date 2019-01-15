@@ -1,7 +1,7 @@
-#include "MovingObject.hpp"
+#include "RavenBot.hpp"
 #include "SteeringBehaviours.hpp"
 
-void MovingObject::update(float delta)
+void RavenBot::update(float delta)
 {
 	b2Vec2 sForce = this->getSteering()->CalculateForce();
 	b2Vec2 acceleration = this->getMassInv() * sForce;

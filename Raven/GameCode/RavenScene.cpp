@@ -1,7 +1,6 @@
 ﻿#include <set>
 #include <functional>
 
-#include <boost/config/suffix.hpp>
 #include <Logic/Logics/Camera/sge_logic_camera_zoom.hpp>
 #include <Object/Shape/sge_shape.hpp>
 #include <algorithm>
@@ -11,9 +10,8 @@
 #include "Image.hpp"
 #include "Logics.hpp"
 #include "Actions.hpp"
-#include "MovingObject.hpp"
+#include "RavenBot.hpp"
 #include "Utilities.hpp"
-#include "PlayerMove.hpp"
 #include "SteeringBehavioursUpdate.hpp"
 #include "Game/InputHandler/sge_input_binder.hpp"
 #include "Renderer/SpriteBatch/sge_sprite_batch.hpp"
@@ -21,14 +19,70 @@
 #include <allocators>
 #include "QuadBatch.hpp"
 #include "QuadObject.hpp"
+#include <queue>
+#include "Graph.hpp"
+
+class Distance
+{
+public:
+	float operator()(const GridVertex* cur, const GridVertex* end) const
+	{
+		return b2Distance(cur->Label().position, end->Label().position);
+	}
+};
+
+class DiagonalDistance
+{
+	const static float sqrt2;
+public:
+	float operator()(const GridVertex* cur, const GridVertex* end) const
+	{
+		auto node = cur->Label().position, goal = end->Label().position;
+		float dx = abs(node.x - goal.x), dy = abs(node.y - goal.y);
+		return dx < dy ? dx * sqrt2 + dy - dx : dy * sqrt2 + dx - dy;
+	}
+};
+const float DiagonalDistance::sqrt2 = sqrt(2.f);
+
+
+void RavenGameState::InitRandomEngine()
+{
+	this->rand = std::bind(std::uniform_int_distribution<size_t>(0, graph.VertexCount()-1), std::default_random_engine{});
+}
+
+GridCell* RavenGameState::GetCell(b2Vec2 pos)
+{
+	size_t x = size_t(std::floor(pos.x)), y = size_t(std::floor(pos.y));
+	return &(cells[y][x]);
+}
+
+GridVertex* RavenGameState::GetVertex(b2Vec2 pos)
+{
+	size_t x = size_t(std::floor(pos.x)), y = size_t(std::floor(pos.y));
+	return cells[y][x].vertex;
+}
+
+GridVertex* RavenGameState::GetRandomVertex(const b2Vec2& position, const float limit)
+{
+	GridVertex* res = graph[this->rand()];
+	while(b2DistanceSquared(position, res->Label().position) < limit * limit)
+	{
+		res = graph[this->rand()];
+	}
+	return res;
+}
+
+Path RavenGameState::GetPath(GridVertex * begin, GridVertex * end)
+{
+	this->graph.AStar(begin, end, DiagonalDistance());
+	return Path(begin, end);
+}
 
 bool RavenScene::init()
 {
 	return true;
 }
 
-constexpr float Width = 80.f;
-constexpr float Height = 60.f;
 constexpr size_t ObstaclesNum = 10u;
 
 RavenScene::RavenScene(SGE::Game* game, const char* path) : Scene(), world(Width, Height), game(game),
@@ -40,16 +94,18 @@ path([game](const char* path)
 	static bool initialized = init();
 }
 
-struct GridCell
+struct GridCellBuild
 {
+	size_t x = 0u, y = 0u;
 	enum State
 	{
 		Accepted,
+		Queued,
 		Untested,
 		Invalid
-	};
-	State state = State::Untested;
+	} state = State::Untested;
 	SGE::Object* dummy = nullptr;
+	GridVertex* vertex;
 };
 
 class GraphCellDummy: public SGE::Object
@@ -59,8 +115,32 @@ public:
 	GraphCellDummy(b2Vec2 pos) : Object(pos.x, pos.y, true, getCircle()) {}
 };
 
+class GraphCellDummy1: public GraphCellDummy
+{
+public:
+	GraphCellDummy1(size_t x, size_t y): GraphCellDummy(x,y)
+	{
+		this->Object::setShape(SGE::Shape::Circle(0.3f, true));
+	}
+	GraphCellDummy1(b2Vec2 pos): GraphCellDummy(pos)
+	{
+		this->Object::setShape(SGE::Shape::Circle(0.3f, true));
+	}
+};
+
+class GraphEdgeDummy: public SGE::Object
+{
+public:
+	GraphEdgeDummy(size_t x, size_t y): Object(0.5f + x, 0.5f + y, true, getCircle())
+	{}
+	GraphEdgeDummy(b2Vec2 pos): Object(pos.x, pos.y, true, getCircle())
+	{}
+};
+
 void RavenScene::loadScene()
 {
+	this->gs = new RavenGameState();
+
 	//RenderBatches
 	SGE::BatchRenderer* renderer = SGE::Game::getGame()->getRenderer();
 	this->level = SGE::Level();
@@ -70,16 +150,18 @@ void RavenScene::loadScene()
 
 	std::string lightBrickTexPath = "Resources/Textures/light_bricks.png";
 	std::string zombieTexPath = "Resources/Textures/zombie.png";
+	std::string cellTexPath = "Resources/Textures/cell.png";
 	std::string beamPath = "Resources/Textures/pointer.png";
 	//Change
 	std::string rocketPath = "Resources/Textures/pointer.png";
 
 	SGE::RealSpriteBatch* wallBatch = renderer->getBatch(renderer->newBatch(scaleUVProgram, lightBrickTexPath, 4, false, true));
 	SGE::RealSpriteBatch* obstacleBatch = renderer->getBatch(renderer->newBatch<QuadBatch>(QuadProgram, lightBrickTexPath, 10, false, true));
-	SGE::RealSpriteBatch* beamBatch = renderer->getBatch(renderer->newBatch(basicProgram, beamPath, 5));
-	SGE::RealSpriteBatch* rocketBatch = renderer->getBatch(renderer->newBatch(basicProgram, beamPath, 10));
+	this->gs->railBatch = renderer->getBatch(renderer->newBatch(basicProgram, beamPath, 5));
+	this->gs->rocketBatch = renderer->getBatch(renderer->newBatch(basicProgram, beamPath, 30));
 	SGE::RealSpriteBatch* botBatch = renderer->getBatch(renderer->newBatch(basicProgram, zombieTexPath, 5));
-	SGE::RealSpriteBatch* graphTestBatch = renderer->getBatch(renderer->newBatch(basicProgram, zombieTexPath, size_t(Width*Height)));
+	SGE::RealSpriteBatch* graphTestBatch = renderer->getBatch(renderer->newBatch(basicProgram, cellTexPath, size_t(Width * Height), false, true));
+	SGE::RealSpriteBatch* graphEdgeTestBatch = renderer->getBatch(renderer->newBatch(basicProgram, beamPath, size_t(Width * Height * 8u), false, true));
 	QuadBatch* obBatch = dynamic_cast<QuadBatch*>(obstacleBatch);
 	if (!obBatch)
 		throw std::runtime_error("QuadBatch cast failed!");
@@ -89,12 +171,12 @@ void RavenScene::loadScene()
 	obstacleBatch->initializeIBO(IBO);
 	obstacleBatch->initializeSampler(GL_REPEAT, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR);
 
-	for (SGE::RealSpriteBatch* b : { wallBatch, beamBatch, rocketBatch })
+	for (SGE::RealSpriteBatch* b : { wallBatch, this->gs->railBatch, this->gs->rocketBatch })
 	{
 		b->initializeIBO(IBO);
 		b->initializeSampler(sampler);
 	}
-	//RenderBatches
+	//!RenderBatches
 
 	auto& world = this->level.getWorld();
 	world.reserve(4 + ObstaclesNum);
@@ -122,84 +204,252 @@ void RavenScene::loadScene()
 	world.back().setShape(horizontal);
 	this->world.AddWall(&world.back(), Wall::Top);
 	wallBatch->addObject(&world.back());
-	//Boundaries
+	//!Boundaries
 
 	//Camera
 	SGE::Camera2d* cam = game->getCamera();
 	cam->setPosition({ 32.f * Width, 32.f * Height });
-	cam->setCameraScale(0.18f);
+	cam->setCameraScale(0.197f);
 	this->addLogic(new SpectatorCamera(10, SGE::Key::W, SGE::Key::S, SGE::Key::A, SGE::Key::D, cam));
-	this->addLogic(new SGE::Logics::CameraZoom(cam, 0.5f, 1.f, 0.178f, SGE::Key::Q, SGE::Key::E));
-	//Camera
+	this->addLogic(new SGE::Logics::CameraZoom(cam, 0.5f, 1.f, 0.197f, SGE::Key::Q, SGE::Key::E));
+	//!Camera
 
 	//Obstacles
 	using Quad = QuadBatch::Quad;
+	std::uniform_real_distribution<float> angle_distribution(-b2_pi, b2_pi);
+	std::mt19937 engine((std::random_device{})());
+	auto angle = std::bind(angle_distribution, engine);
 	Quad q1 = { 4.f * glm::vec2{-64.f, -64.f}, 4.f * glm::vec2{300.f, -300.f}, 4.f * glm::vec2{128.f, 400.f}, 4.f * glm::vec2{ -80.f, 128.f } };
-	SGE::Object* obstacle1 = new QuadObstacle(Width * .5f, Height * .5f, 0.f, q1);
-	SGE::Object* obstacle2 = new QuadObstacle(Width * .5f + 10.f, Height * .5f, b2_pi*0.5f, q1);
+	SGE::Object* obstacle1 = new QuadObstacle(Width * .5f, Height * .5f, angle(), q1);
+	SGE::Object* obstacle2 = new QuadObstacle(Width * .5f + 10.f, Height * .5f, angle(), q1);
 	obBatch->addObject(obstacle1, q1);
 	obBatch->addObject(obstacle2, q1);
 	this->world.AddObstacle(obstacle1);
 	this->world.AddObstacle(obstacle2);
+	
+	this->gs->obstacles.assign({obstacle1, obstacle2});
 
 	//Grid
-	constexpr size_t X = size_t(Width);
-	constexpr size_t Y = size_t(Height);
-	std::vector<SGE::Object*> obstacles;
-	size_t x = 0u, y = 0u;
-	GridCell::State gs = GridCell::Accepted;
-	int intersections = 0;
-	for(x = 0u; x < X; ++x)
+//#define GraphCellDebug
+#define GraphEdgeDebug
 	{
-		for(y = 0u; y < Y; ++y)
+		std::queue<GridCellBuild*> cells;
+		int intersections = 0;
+		GridCellBuild grid[Y][X];
+		std::pair<int, int> directions[8] =
 		{
-			b2Vec2 pos = b2Vec2{ 0.5f + x, 0.5f + y };
-			obstacles = std::move(this->world.getObstacles(pos, 1.f));
+			{-1, -1}, {-1, 0}, {-1, 1}, {0, 1}, {1, 1}, {1, 0}, {1, -1}, {0, -1}
+		};
+		b2Vec2 points[4] = {{-.5f, 0.f}, {0.f, -.5f}, {0.5f, 0.f}, {0.f, .5f}};
+		b2Vec2 diags[4];
+		for(size_t i = 0; i < 4u; ++i)
+			diags[i] = b2Mul(b2Rot(0.5f * b2_pi), points[i]);
+
+		for(size_t x = 0u; x < X; ++x)
+			for(size_t y = 0u; y < Y; ++y)
+			{
+				grid[y][x].x = x;
+				grid[y][x].y = y;
+			}
+
+		grid[0][0].state = GridCellBuild::Queued;
+		cells.push(&grid[0][0]);
+
+		while(!cells.empty())
+		{
+			GridCellBuild& currentCell = *cells.front();
+			cells.pop();
+			intersections = 0;
+			b2Vec2 pos = b2Vec2{0.5f + currentCell.x, 0.5f + currentCell.y};
+			std::vector<SGE::Object*> obstacles = std::move(this->world.getObstacles(pos, 1.5f));
 			for(SGE::Object* o : obstacles)
 			{
 				QuadObstacle* qo = dynamic_cast<QuadObstacle*>(o);
-				if (!qo) continue;
+				if(!qo) continue;
 				for(Edge edge : qo->getEdges())
 				{
 					b2Vec2 radius = -edge.Normal();
 					radius *= 0.5f;
-					float dist;
-					b2Vec2 intersection;
-					if(LineIntersection(pos, pos + radius, edge.To(), edge.From(), dist, intersection))
+					float dist = b2DistanceSquared(pos, edge.From());
+					if(dist <= 0.25f)
 					{
-						gs = GridCell::Invalid;
+						currentCell.state = GridCellBuild::Invalid;
 						break;
 					}
-					if(LineIntersection(pos, pos + b2Vec2{100.f, 0.f}, edge.To(), edge.From(), dist, intersection))
+					b2Vec2 intersection;
+					if(LineIntersection(pos, pos + radius, edge.From(), edge.To(), dist, intersection))
+					{
+						currentCell.state = GridCellBuild::Invalid;
+						break;
+					}
+					if(LineIntersection(pos, pos + b2Vec2{100.f, 0.f}, edge.From(), edge.To(), dist, intersection))
 					{
 						++intersections;
 					}
 				}
-				if (gs == GridCell::Invalid && 1 == intersections % 2)
+				if(currentCell.state == GridCellBuild::Invalid || 1 == intersections % 2)
 					break;
 			}
-			auto stateToString = [](GridCell::State s)-> std::string
+			if(currentCell.state != GridCellBuild::Invalid && 0 == intersections % 2)
 			{
-				switch (s)
+				currentCell.state = GridCellBuild::Accepted;
+				currentCell.vertex = new GridVertex(CellLabel(pos));
+				this->gs->graph.AddVertex(currentCell.vertex);
+#ifdef GraphCellDebug
+				currentCell.dummy = new GraphCellDummy(currentCell.x, currentCell.y);
+				graphTestBatch->addObject(currentCell.dummy);
+#endif
+				for(size_t i = 0u; i < 8u; ++i)
 				{
-				case GridCell::Accepted: return "Accepted";
-				case GridCell::Untested: return "Untested";
-				case GridCell::Invalid: return "Invalid";
-				default: return "NAS";
+					auto dir = directions[i];
+					size_t x = currentCell.x + dir.first;
+					size_t y = currentCell.y + dir.second;
+					b2Vec2 edgeVec = b2Vec2{float(dir.first), float(dir.second)};
+					if(x < X && y < Y)
+					{
+						GridCellBuild& otherCell = grid[y][x];
+						switch(otherCell.state)
+						{
+						case GridCellBuild::Accepted:
+						{
+							bool intersected = false;
+							for(SGE::Object* o : obstacles)
+							{
+								QuadObstacle* qo = dynamic_cast<QuadObstacle*>(o);
+								if(!qo) continue;
+								for(Edge edge : qo->getEdges())
+								{
+									b2Vec2(&pts)[4] = i % 2 ? diags : points;
+									for(b2Vec2 offset : pts)
+									{
+										b2Vec2 from = pos + offset;
+										b2Vec2 to = from + edgeVec;
+										float dist;
+										b2Vec2 inters;
+										intersected = LineIntersection(from, to, edge.From(), edge.To(), dist, inters);
+										if(intersected)
+										{
+											break;
+										}
+									}
+									if(intersected) break;
+								}
+								if(intersected) break;
+							}
+							if(!intersected)
+							{
+								this->gs->graph.AddEdge(currentCell.vertex, otherCell.vertex, edgeVec.Length());
+#ifdef GraphEdgeDebug
+								auto edgeOb = new GraphEdgeDummy(pos + 0.5f * edgeVec);
+								edgeOb->setOrientation(edgeVec.Orientation());
+								edgeOb->setLayer(.5f);
+								edgeOb->setShape(SGE::Shape::Rectangle(edgeVec.Length(), 0.05f, true));
+								graphEdgeTestBatch->addObject(edgeOb);
+#endif
+							}
+							break;
+						}
+						case GridCellBuild::Queued: break;
+						case GridCellBuild::Untested:
+						{
+							otherCell.state = GridCellBuild::Queued;
+							cells.push(&otherCell);
+							break;
+						}
+						case GridCellBuild::Invalid: break;
+						default: break;
+						}
+					}
 				}
-			};
-			if(gs == GridCell::Accepted && 0 == intersections % 2)
-			{
-				graphTestBatch->addObject(new GraphCellDummy(x, y));
 			}
-			else
+		}
+		for(size_t x = 0u; x < X; ++x)
+		{
+			for(size_t y = 0u; y < Y; ++y)
 			{
-				std::cout << "Failed X: " << x << ':' << y << ' ' << stateToString(gs) << " intersections: " << intersections << std::endl;
+				if(grid[y][x].state == GridCellBuild::Accepted)
+				{
+					auto& cell = this->gs->cells[y][x];
+					cell.state = GridCell::Valid;
+					cell.vertex = grid[y][x].vertex;
+				}
 			}
-			gs = GridCell::Accepted;
-			intersections = 0;
+		}
+//#define ASTARDEBUG
+#ifdef ASTARDEBUG
+		//Test
+		GridVertex* begin = this->gs->cells[0][0].vertex;
+		GridVertex* end = this->gs->cells[Y-1u][X - 1u].vertex;
+		this->gs->graph.AStar(begin, end, DiagonalDistance{});
+		while(end != begin)
+		{
+			graphTestBatch->addObject(new GraphCellDummy(end->Label().position));
+			end = end->Parent();
+		}
+		for(auto v : this->gs->graph)
+		{
+			if(v->State() != CTL::VertexState::White)
+			{
+				graphTestBatch->addObject(new GraphCellDummy1(v->Label().position));
+			}
+		}
+#endif
+	} //!Grid
+
+	//Spawn Points
+	std::uniform_int_distribution<size_t> randWidth(3u, X/4u -3u);
+	std::uniform_int_distribution<size_t> randHeight(3u, Y/4u - 3u);
+	auto randW = std::bind(randWidth, engine);
+	auto randH = std::bind(randHeight, engine);
+	for(size_t xI = 0u; xI < 4u; ++xI)
+	{
+		for(size_t yI = 0u; yI < 4u; ++yI)
+		{
+			size_t x = xI * (X/4u), y = yI * (Y/4u);
+			GridCell* cell = nullptr;
+			int tries = 30;
+			while(!cell && tries)
+			{
+				--tries;
+				cell = &(this->gs->cells[y + randH()][x + randW()]);
+				if(cell->state == GridCell::Invalid)
+				{
+					cell = nullptr;
+				}
+			}
+			if(!tries)
+			{
+				std::cout << "No cells at" << xI << ' ' << yI << std::endl;
+				continue;
+			}
+			this->gs->spawnPoints.push_back(cell);
 		}
 	}
+	for(auto cell : this->gs->spawnPoints)
+	{
+		//graphTestBatch->addObject(new GraphCellDummy(cell->vertex->Label().position));
+	}
+	//Players
+	{
+		this->gs->bots.reserve(5);
+		decltype(this->gs->spawnPoints) pts = this->gs->spawnPoints;
+		std::random_shuffle(pts.begin(), pts.end());
+		for(int i = 0; i < 5; ++i)
+		{
+			this->gs->bots.emplace_back(pts[i]->vertex->Label().position, getCircle(), &this->world);
+			botBatch->addObject(&this->gs->bots.back());
+			this->world.AddMover(&this->gs->bots.back());
+		}
+	}
+
+	this->gs->InitRandomEngine();
+
+	//Logics
+	this->addLogic(new BotLogic(&this->world, this->gs));
+	this->addLogic(new SteeringBehavioursUpdate(&this->gs->bots));
+	this->addLogic(new SeparateBots(&this->world, &this->gs->bots));
+	this->addLogic(new MoveAwayFromObstacle(&this->world, this->gs->obstacles));
+	this->addLogic(new MoveAwayFromWall(&this->world, this->gs->bots));
 }
 
 void RavenScene::unloadScene()
@@ -225,6 +475,7 @@ void vec_clear(Vec& vec)
 void RavenScene::finalize()
 {
 	game->getRenderer()->deleteSceneBatch(this);
+	delete this->gs;
 	this->level.clear();
 	this->world.clear();
 	vec_clear(this->getLogics());

@@ -4,31 +4,46 @@
 
 class World;
 
-enum class MoverState: char
+enum class BotState: char
 {
-	Moving,
-	Hiding,
+	Wandering,
 	Attacking,
-	Dead
+	Running,
+	GettingAmmo,
+	GettingHealth,
+	GettingArmor
 };
 
-class MovingObject: public SGE::Object
+class RavenBot: public SGE::Object
 {
 protected:
+	constexpr static float RailgunReload = 5.f;
+	constexpr static float LauncherReload = 2.f;
+	constexpr static float RailgunDamage = 100.f;
+	constexpr static float LauncherDamage = 65.f;
+
+
 	b2Vec2 velocity = b2Vec2_zero;
 	b2Vec2 heading = b2Vec2_zero;
 	b2Vec2 side = b2Vec2_zero;
 	float mass = 1.f;
 	float massInv = 1.f;
-	float maxSpeed = 4.f;
-	float maxForce = 16.f;
+	float maxSpeed = 3.f;
+	float maxForce = 15.f;
 	float maxTurnRate = 90.f;
+	float health = 100.f;
+	float armor = 200.f;
+	float rgCD = RailgunReload;
+	float rlCD = LauncherReload;
+	unsigned rgAmmo = 10u;
+	unsigned rlAmmo = 15u;
 	World* world = nullptr;
-	SteeringBehaviours* steering = new SteeringBehaviours(this);
-	MoverState state = MoverState::Hiding;
+	SteeringBehaviours* steering = new RavenSteering(this);
+	BotState state = BotState::Wandering;
 public:
+	SGE::Object* RailgunTrace = nullptr;
 
-	MovingObject(const b2Vec2& position, SGE::Shape* shape, World* world, const b2Vec2& heading = b2Vec2{1.f,0.f})
+	RavenBot(const b2Vec2& position, SGE::Shape* shape, World* world, const b2Vec2& heading = b2Vec2{1.f,0.f})
 		: Object(position, true, shape), heading(heading), side(heading.Skew()), world(world)
 	{
 		this->orientation = heading.Orientation();
@@ -133,44 +148,82 @@ public:
 		return this->velocity.Length();
 	}
 
-	bool IsDead() const
-	{
-		return this->state == MoverState::Dead;
-	}
-
 	bool IsAttacking() const
 	{
-		return this->state == MoverState::Attacking;
+		return this->state == BotState::Attacking;
 	}
 
-	bool IsHiding() const
+	bool IsRunning() const
 	{
-		return this->state == MoverState::Hiding;
+		return this->state == BotState::Running;
 	}
 
-	bool IsMoving() const
+	bool IsWandering() const
 	{
-		return this->state == MoverState::Moving;
+		return this->state == BotState::Wandering;
 	}
 
-	void setState(MoverState state)
+	bool IsDead() const
+	{
+		return false;
+	}
+
+	void setState(BotState state)
 	{
 		this->state = state;
 	}
-};
-
-class Player: public MovingObject
-{
-protected: 
-	float hp = 100.f;
-public:
-	using MovingObject::MovingObject;
-	float getHP() const
+	
+	float Health() const
 	{
-		return this->hp;
+		return this->health;
 	}
-	void Damage(float damage)
+
+	float Armor() const
 	{
-		this->hp -= damage;
+		return this->armor;
+	}
+
+	void AddHealth(float h)
+	{
+		this->health += h;
+	}
+
+	void AddArmor(float r)
+	{
+		if(armor < 0.f)
+			armor = 0.f;
+		this->armor += r;
+	}
+
+	void Damage(float d)
+	{
+		if(armor < 0.f)
+		{
+			this->health -= d;
+		}
+		else
+		{
+			this->armor -= d;
+		}
+	}
+
+	void AddRailgunAmmo(unsigned i)
+	{
+		this->rgAmmo += i;
+	}
+
+	void AddRocketAmmo(unsigned i)
+	{
+		this->rlAmmo += i;
+	}
+
+	BotState getState()
+	{
+		return this->state;
+	}
+
+	bool IsFollowingPath() const
+	{
+		return !this->getSteering()->getPath().Finished();
 	}
 };

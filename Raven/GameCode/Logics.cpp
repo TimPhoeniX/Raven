@@ -15,50 +15,28 @@
 #include "Renderer/SpriteBatch/sge_sprite_batch.hpp"
 #include "IntroScene.hpp"
 
-void DamagePlayer::performLogic()
+MoveAwayFromObstacle::MoveAwayFromObstacle(World* const world, const std::vector<SGE::Object*>& obstacles): Logic(SGE::LogicPriority::Highest), world(world), obstacles(obstacles)
 {
-	this->ticked = false;
-	if(this->timer > (this->player->getHP() > 10.f ? 1.f : 0.03f))
-	{
-		std::cout << "You have " << player->getHP() << " Health Points left." << std::endl;
-		this->timer = 0;
-		
-	}
-	this->movers.clear();
-	this->world->getNeighbours(this->movers, this->player->getPosition(), 3.f * this->player->getShape()->getRadius());
-	for (MovingObject* mover : this->movers)
-	{
-		float dist = b2DistanceSquared(this->player->getPosition(), mover->getPosition());
-		float radii = this->player->getShape()->getRadius() + mover->getShape()->getRadius();
-		radii *= radii;
-		if(dist < radii)
-		{
-			if(!this->ticked)
-			{
-				this->timer += SGE::delta_time;
-				this->ticked = true;
-			}
-			this->player->Damage(SGE::delta_time * this->dps);
-		}
-	}
+	movers.reserve(10);
 }
 
 void MoveAwayFromObstacle::performLogic()
 {
-	for(SGE::WorldElement& w: *this->obstacles)
+	for(SGE::Object* w: this->obstacles)
 	{
-		SGE::Shape obShape = *w.getShape();
+		SGE::Shape obShape = *w->getShape();
+		this->world->getNeighbours(this->movers, w->getPosition(), obShape.getRadius() + 1.f);
 		switch(obShape.getType())
 		{
+		case SGE::ShapeType::Rectangle:
 		case SGE::ShapeType::Circle:
 		{
 			this->movers.clear();
-			this->world->getNeighbours(this->movers, w.getPosition(), obShape.getRadius() + 1.f);		
 			if(this->movers.empty()) continue;
-			for(MovingObject* mo : this->movers)
+			for(RavenBot* mo : this->movers)
 			{
 				SGE::Shape moShape = *mo->getShape();
-				b2Vec2 toMover = mo->getPosition() - w.getPosition();
+				b2Vec2 toMover = mo->getPosition() - w->getPosition();
 				float dist = toMover.Length();
 				float radius = moShape.getRadius() + obShape.getRadius();
 				if(dist > 0.f && dist < radius)
@@ -69,57 +47,53 @@ void MoveAwayFromObstacle::performLogic()
 			}
 			break;
 		}
-		case SGE::ShapeType::Rectangle:
-		{
-			break;
-		}
 		case SGE::ShapeType::None: break;
-		default: ;
-		}
-	}
-	auto ob = this->world->getObstacles(this->player, 12.f);
-	for(SGE::Object* o : ob)
-	{
-		SGE::Shape obShape = *o->getShape();
-		switch(obShape.getType())
+		case SGE::ShapeType::Quad:
 		{
-		case SGE::ShapeType::Circle:
-		{
-			SGE::Shape moShape = *this->player->getShape();
-			b2Vec2 toMover = this->player->getPosition() - o->getPosition();
-			float dist = toMover.Length();
-			float radius = moShape.getRadius() + obShape.getRadius();
-			if(dist < radius)
+			for(auto& wall : reinterpret_cast<QuadObstacle*>(w)->getEdges())
 			{
-				toMover *= (radius - dist) / dist;
-				this->player->setPosition(this->player->getPosition() + toMover);
+				for(RavenBot* mo : this->movers)
+				{
+					float fradius = mo->getShape()->getRadius();
+					b2Vec2 pos = mo->getPosition();
+					if(PointToLineDistance(pos, wall.From(), wall.To()) < fradius)
+					{
+						float dist;
+						b2Vec2 intersect;
+						b2Vec2 radius = fradius * -wall.Normal();
+						if(LineIntersection(pos, pos + radius, wall.From(), wall.To(), dist, intersect))
+						{
+							intersect -= pos + radius;
+							mo->setPosition(pos + intersect);
+						}
+					}
+				}
 			}
-			break;
 		}
-		case SGE::ShapeType::Rectangle:
-		{
-			break;
-		}
-		case SGE::ShapeType::None: break;
-		default:;
+		default: break;
 		}
 	}
 }
 
-void SeparateZombies::performLogic()
+SeparateBots::SeparateBots(World* const world, std::vector<RavenBot>* const movers): Logic(SGE::LogicPriority::Highest), world(world), movers(movers)
+{
+	colliding.reserve(10);
+}
+
+void SeparateBots::performLogic()
 {
 	float baseRadius = 0.f;
 	b2Vec2 basePosition = b2Vec2_zero;
 	float otherRadius = 0.f;
 	b2Vec2 otherPosition = b2Vec2_zero;
-	for (MovingObject& mo : *this->movers)
+	for (RavenBot& mo : *this->movers)
 	{
 		baseRadius = mo.getShape()->getRadius();
 		basePosition = mo.getPosition();
 		this->colliding.clear();
 		this->world->getNeighbours(this->colliding, &mo, 2.f * baseRadius);
 		if (this->colliding.empty()) continue;
-		for (MovingObject* other : this->colliding)
+		for (RavenBot* other : this->colliding)
 		{
 			otherPosition = other->getPosition();
 			otherRadius = other->getShape()->getRadius();
@@ -134,30 +108,11 @@ void SeparateZombies::performLogic()
 			}
 		}
 	}
-	baseRadius = this->player->getShape()->getRadius();
-	basePosition = this->player->getPosition();
-	this->colliding.clear();
-	this->world->getNeighbours(this->colliding, basePosition, 3.f * baseRadius);
-	if (this->colliding.empty()) return;
-	for (MovingObject* other : this->colliding)
-	{
-		otherPosition = other->getPosition();
-		otherRadius = other->getShape()->getRadius();
-		b2Vec2 toOther = otherPosition - basePosition;
-		float dist = toOther.Length();
-		float radius = baseRadius + otherRadius;
-		if (dist < radius)
-		{
-			toOther *= 0.5f * (radius - dist) / dist;
-			other->setPosition(otherPosition + toOther);
-			this->player->setPosition(basePosition - toOther);
-		}
-	}
 }
 
-void MoveAwayFromWall::CollideWithWall(MovingObject& mo) const
+void MoveAwayFromWall::CollideWithWall(RavenBot& mo) const
 {
-	for (std::pair<SGE::Object*, Wall>& wall: this->world->getWalls())
+	for (std::pair<SGE::Object*, Edge>& wall: this->world->getWalls())
 	{
 		float fradius = mo.getShape()->getRadius();
 		b2Vec2 pos = mo.getPosition();
@@ -165,25 +120,7 @@ void MoveAwayFromWall::CollideWithWall(MovingObject& mo) const
 		{
 			float dist;
 			b2Vec2 intersect;
-			b2Vec2 radius;
-			/*switch (wall.second.Type())
-			{
-			case Wall::Left: 
-				radius = b2Vec2{+fradius,0.f};
-				break;
-			case Wall::Right:
-				radius = b2Vec2{-fradius,0.f};
-				break;
-			case Wall::Top:
-				radius = b2Vec2{0.f, -fradius};
-				break;
-			case Wall::Bottom:
-				radius = b2Vec2{0.f, +fradius};
-				break;
-			default:
-				continue;
-			}*/
-			radius = fradius * -wall.second.Normal();
+			b2Vec2 radius = fradius * -wall.second.Normal();
 			if(LineIntersection(pos, pos + radius, wall.second.From(), wall.second.To(), dist, intersect))
 			{
 				intersect -= pos + radius;
@@ -195,33 +132,9 @@ void MoveAwayFromWall::CollideWithWall(MovingObject& mo) const
 
 void MoveAwayFromWall::performLogic()
 {
-	for(MovingObject& mo: this->movers)
+	for(RavenBot& mo: this->movers)
 	{
 		CollideWithWall(mo);
-	}
-	CollideWithWall(*this->player);
-}
-
-SnapCamera::SnapCamera(const float speed, const SGE::Key up, const SGE::Key down, const SGE::Key left, const SGE::Key right, const SGE::Key snapKey, SGE::Object* snapTo, SGE::Camera2d* cam)
-	:Logic(SGE::LogicPriority::Low), speed(speed), up(up), down(down), left(left), right(right), snapKey(snapKey), snapTo(snapTo), cam(cam)
-{}
-
-void SnapCamera::performLogic()
-{
-	this->snapped = SGE::isPressed(snapKey); //We need to be able to send signals to actions, like sending actions to objects
-	glm::vec2 move = {0, 0};
-	if(!this->snapped)
-	{
-		move = this->snapTo->getPositionGLM();
-		this->cam->setPositionGLM(move.x, move.y); //Replace with action, i.e. GoTo
-	}
-	else
-	{
-		if(SGE::isPressed(this->up)) move.y += this->speed;
-		if(SGE::isPressed(this->down)) move.y -= this->speed;
-		if(SGE::isPressed(this->right)) move.x += this->speed;
-		if(SGE::isPressed(this->left)) move.x -= this->speed;
-		this->sendAction(new SGE::ACTION::Move(this->cam, move.x, move.y, true));
 	}
 }
 
@@ -277,7 +190,7 @@ Aim::Aim(World* world, SGE::Object* aimer, SGE::MouseObject* mouse, SGE::Camera2
 bool Aim::aim(b2Vec2 pos, b2Vec2 direction)
 {
 	b2Vec2 hitPos = b2Vec2_zero;
-	MovingObject* hitObject = this->world->Raycast(pos, direction, hitPos);
+	RavenBot* hitObject = this->world->Raycast(pos, direction, hitPos);
 	this->pointer->setVisible(true);
 	b2Vec2 beam = hitPos - pos;
 	this->pointer->setPosition(pos + 0.5f * beam);
@@ -287,7 +200,7 @@ bool Aim::aim(b2Vec2 pos, b2Vec2 direction)
 	if(hitObject)
 	{
 		//HitLogic
-		hitObject->setState(MoverState::Dead);
+		//hitObject->setState(BotState::Dead);
 		hitObject->setLayer(0.2f);
 		this->world->RemoveMover(hitObject);
 		++this->counter;
@@ -330,9 +243,59 @@ WinCondition::WinCondition(size_t& zombies, size_t& killedZombies, SGE::Scene* e
 
 void WinCondition::performLogic()
 {
-	if(zombies == killedZombies || this->player->getHP() < 0)
+	if(false)
 	{
 		reinterpret_cast<EndScene*>(endGame)->won = (zombies == killedZombies);
 		this->sendAction(new Load(endGame));
+	}
+}
+
+RocketLogic::RocketLogic(std::vector<Rocket*> r, World* w): Logic(SGE::LogicPriority::High), rockets(r), world(w)
+{
+}
+
+void RocketLogic::performLogic()
+{
+	for (Rocket* rocket: this->rockets)
+	{
+		b2Vec2 velocity = rocket->Speed() * rocket->Heading();
+		auto oldPos = rocket->getPosition();
+		rocket->setPosition(oldPos + SGE::delta_time * velocity);
+		world->UpdateObstacle(rocket, oldPos);
+	}
+}
+
+void BotLogic::updateBotState(RavenBot& bot)
+{
+}
+
+void BotLogic::updateBot(RavenBot& bot)
+{
+	this->updateBotState(bot);
+	switch(bot.getState())
+	{
+	case BotState::Wandering:
+		{
+			if(!bot.IsFollowingPath())
+			{
+				GridVertex* begin = gs->GetCell(bot.getPosition())->vertex;
+				GridVertex* end = gs->GetRandomVertex(bot.getPosition(), 5.f);
+				bot.getSteering()->NewPath(std::move(this->gs->GetPath(begin, end)));
+			}
+		}
+	case BotState::Attacking: break;
+	case BotState::Running: break;
+	case BotState::GettingAmmo: break;
+	case BotState::GettingHealth: break;
+	case BotState::GettingArmor: break;
+	default: ;
+	}
+}
+
+void BotLogic::performLogic()
+{
+	for(RavenBot& bot: this->gs->bots)
+	{
+		this->updateBot(bot);
 	}
 }

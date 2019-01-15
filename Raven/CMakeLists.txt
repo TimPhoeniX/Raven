@@ -2,13 +2,17 @@ set(GAME_SOURCE_FILES main.cpp
 		GameCode/Actions.cpp
 		GameCode/Actions.hpp
 		GameCode/CellSpacePartition.hpp
+		GameCode/Graph.hpp
+		GameCode/GridGraph.hpp
 		GameCode/Image.hpp
 		GameCode/IntroScene.cpp
 		GameCode/IntroScene.hpp
 		GameCode/Logics.cpp
 		GameCode/Logics.hpp
-		GameCode/MovingObject.cpp
-		GameCode/MovingObject.hpp
+		GameCode/RavenBot.cpp
+		GameCode/RavenBot.hpp
+		GameCode/Objects.cpp
+		GameCode/Objects.hpp
 		GameCode/Path.hpp
 		GameCode/PlayerMove.cpp
 		GameCode/PlayerMove.hpp

@@ -1,8 +1,9 @@
 #pragma once
 #include "CellSpacePartition.hpp"
-#include "MovingObject.hpp"
+#include "RavenBot.hpp"
 #include "Wall.hpp"
 #include "Utilities.hpp"
+#include "Objects.hpp"
 
 namespace
 {
@@ -13,10 +14,10 @@ namespace
 class World
 {
 protected:
-	CellSpacePartition<MovingObject, partitionX, partitionY> movers;
+	CellSpacePartition<RavenBot, partitionX, partitionY> movers;
 	CellSpacePartition<SGE::Object, partitionX, partitionY> obstacles;
 	CellSpacePartition<SGE::Object, partitionX, partitionY> items;
-	std::vector<std::pair<SGE::Object*, Wall>> walls;
+	std::vector<std::pair<SGE::Object*, Edge>> walls;
 	const float width, height, cellWidth, cellHeight;
 public:
 	class Ray
@@ -47,25 +48,27 @@ public:
 	};
 	World(float width, float height);
 
-	std::vector<SGE::Object*> getObstacles(MovingObject* const mover, float radius);
+	std::vector<SGE::Object*> getObstacles(RavenBot* const mover, float radius);
 
-	std::vector<SGE::Object*> getObstacles(MovingObject* const mover);
+	std::vector<SGE::Object*> getObstacles(RavenBot* const mover);
 
 	std::vector<SGE::Object*> getObstacles(b2Vec2 position, float radius);
 
-	void getNeighbours(std::vector<MovingObject*>& res, MovingObject* const mover);
+	void getNeighbours(std::vector<RavenBot*>& res, RavenBot* const mover);
 
-	void getNeighbours(std::vector<MovingObject*>& res, MovingObject* const mover, float radius);
+	void getNeighbours(std::vector<RavenBot*>& res, RavenBot* const mover, float radius);
 
-	void getNeighbours(std::vector<MovingObject*>& res, b2Vec2 position, float radius);
+	void getNeighbours(std::vector<RavenBot*>& res, b2Vec2 position, float radius);
 
-	std::vector<std::pair<SGE::Object*, Wall>>& getWalls();
+	std::vector<std::pair<SGE::Object*, Edge>>& getWalls();
 
 	void AddObstacle(SGE::Object* ob);
 
-	void AddMover(MovingObject* mo);
+	void AddMover(RavenBot* mo);
 
-	void UpdateMover(MovingObject* mo, b2Vec2 oldPos);
+	void UpdateObstacle(SGE::Object* rocket, b2Vec2 oldPos);
+
+	void UpdateMover(RavenBot* mo, b2Vec2 oldPos);
 
 	void AddWall(SGE::Object* wall, Wall::WallEdge edge);
 
@@ -100,6 +103,6 @@ public:
 		return closestObject;
 	}
 
-	MovingObject* Raycast(b2Vec2 from, b2Vec2 direction, b2Vec2& hit) const;
-	void RemoveMover(MovingObject* hitObject);
+	RavenBot* Raycast(b2Vec2 from, b2Vec2 direction, b2Vec2& hit) const;
+	void RemoveMover(RavenBot* hitObject);
 };
