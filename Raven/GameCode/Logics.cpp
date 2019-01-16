@@ -267,6 +267,139 @@ void RocketLogic::performLogic()
 
 void BotLogic::updateBotState(RavenBot& bot)
 {
+	for(auto& enemy : this->gs->bots)
+	{
+		b2Vec2 botPos = bot.getPosition();
+		b2Vec2 enemyPos = enemy.getPosition();
+		b2Vec2 hit = enemyPos - botPos;
+		if (&bot == &enemy) continue;
+		if(bot.enemies.find(&enemy) != bot.enemies.end())
+		{
+			RavenBot* hitBot = this->world->Raycast(botPos, hit, hit);
+			if (!hitBot)
+			{
+				bot.enemies.erase(hitBot);
+			}
+		}
+		else
+		{
+			if (b2Abs(b2Atan2(b2Cross(bot.getHeading(), hit), b2Dot(bot.getHeading(), hit))) < 0.5f * b2_pi)
+			{
+				RavenBot* hitBot = this->world->Raycast(botPos, hit, hit);
+				if (hitBot)
+				{
+					bot.enemies.insert(hitBot);
+				}
+			}
+		}
+	}
+
+	switch (bot.getState())
+	{
+	case BotState::Wandering:
+	{
+		if(bot.enemies.empty())
+		{
+			if (bot.Health() < 65.f)
+			{
+				bot.setState(BotState::GettingHealth);
+			}
+			else if (bot.Armor() < 65.f)
+			{
+				bot.setState(BotState::GettingArmor);
+			}
+			else if( (bot.RGAmmo() + bot.RLAmmo()) < 15u)
+			{
+				bot.setState(BotState::GettingAmmo);
+			}
+		}
+		else
+		{
+			if (bot.Health() < 65.f || bot.Armor() < 65.f)
+			{
+				bot.setState(BotState::Running);
+			}
+			else
+			{
+				bot.setState(BotState::Attacking);
+			}
+		}
+	}
+	case BotState::Attacking:
+	{
+		if (!bot.enemies.empty())
+		{
+			if (bot.Health() < 65.f || (bot.RGAmmo() + bot.RLAmmo()) == 0u)
+			{
+				bot.setState(BotState::Running);
+			}
+		}
+		else
+		{
+			bot.setState(BotState::Wandering);
+		}
+	}
+	case BotState::Running:
+	{
+		if (bot.enemies.empty())
+		{
+			bot.setState(BotState::Wandering);
+		}
+	}
+	case BotState::GettingAmmo:
+	{
+		if(!bot.enemies.empty() || bot.Hit())
+		{
+			bot.setState(BotState::Attacking);
+		}
+		else
+		{
+			if((bot.RGAmmo() + bot.RLAmmo()) > 40u)
+			{
+				bot.setState(BotState::Wandering);
+			}
+		}
+	}
+	case BotState::GettingHealth:
+	{
+		if (!bot.enemies.empty())
+		{
+			bot.setState(BotState::Attacking);
+		}
+		else
+		{
+			if (bot.Hit())
+			{
+				bot.setState(BotState::Running);
+			}
+			else if (bot.Health() > 100.f)
+			{
+				bot.setState(BotState::Wandering);
+			}
+		}
+	}
+	case BotState::GettingArmor:
+	{
+		if (!bot.enemies.empty())
+		{
+			bot.setState(BotState::Attacking);
+		}
+		else
+		{
+			if(bot.Hit())
+			{
+				bot.setState(BotState::Running);
+			}
+			else if(bot.Armor() > 200.f)
+			{
+				bot.setState(BotState::Wandering);
+			}
+		}
+	}
+	default:
+		break;
+	}
+	bot.ClearHit();
 }
 
 void BotLogic::updateBot(RavenBot& bot)

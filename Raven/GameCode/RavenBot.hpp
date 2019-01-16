@@ -1,6 +1,7 @@
 #pragma once
 #include <Object/sge_object.hpp>
 #include "SteeringBehaviours.hpp"
+#include <set>
 
 class World;
 
@@ -37,10 +38,12 @@ protected:
 	float rlCD = LauncherReload;
 	unsigned rgAmmo = 10u;
 	unsigned rlAmmo = 15u;
+	bool hit = false;
 	World* world = nullptr;
 	SteeringBehaviours* steering = new RavenSteering(this);
 	BotState state = BotState::Wandering;
 public:
+	std::set<RavenBot*> enemies;
 	SGE::Object* RailgunTrace = nullptr;
 
 	RavenBot(const b2Vec2& position, SGE::Shape* shape, World* world, const b2Vec2& heading = b2Vec2{1.f,0.f})
@@ -197,6 +200,7 @@ public:
 
 	void Damage(float d)
 	{
+		this->hit = true;
 		if(armor < 0.f)
 		{
 			this->health -= d;
@@ -205,6 +209,36 @@ public:
 		{
 			this->armor -= d;
 		}
+	}
+
+	bool Hit() const
+	{
+		return this->hit;
+	}
+
+	void ClearHit()
+	{
+		this->hit = false;
+	}
+
+	unsigned RGAmmo() const
+	{
+		return this->rgAmmo;
+	}
+
+	unsigned RLAmmo() const
+	{
+		return this->rlAmmo;
+	}
+
+	float RLCD() const
+	{
+		return this->rlCD;
+	}
+
+	float RGCD() const
+	{
+		return this->rgCD;
 	}
 
 	void AddRailgunAmmo(unsigned i)
