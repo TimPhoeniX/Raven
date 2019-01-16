@@ -190,7 +190,7 @@ Aim::Aim(World* world, SGE::Object* aimer, SGE::MouseObject* mouse, SGE::Camera2
 bool Aim::aim(b2Vec2 pos, b2Vec2 direction)
 {
 	b2Vec2 hitPos = b2Vec2_zero;
-	RavenBot* hitObject = this->world->Raycast(pos, direction, hitPos);
+	RavenBot* hitObject = this->world->RaycastBot(nullptr, pos, direction, hitPos);
 	this->pointer->setVisible(true);
 	b2Vec2 beam = hitPos - pos;
 	this->pointer->setPosition(pos + 0.5f * beam);
@@ -265,163 +265,301 @@ void RocketLogic::performLogic()
 	}
 }
 
-void BotLogic::updateBotState(RavenBot& bot)
+void BotLogic::updateEnemies(RavenBot& bot)
 {
 	for(auto& enemy : this->gs->bots)
 	{
+		if(&bot == &enemy) continue;
 		b2Vec2 botPos = bot.getPosition();
 		b2Vec2 enemyPos = enemy.getPosition();
 		b2Vec2 hit = enemyPos - botPos;
-		if (&bot == &enemy) continue;
 		if(bot.enemies.find(&enemy) != bot.enemies.end())
 		{
-			RavenBot* hitBot = this->world->Raycast(botPos, hit, hit);
+			RavenBot* hitBot = this->world->RaycastBot(&bot, botPos, hit, hit);
 			if (!hitBot)
 			{
-				bot.enemies.erase(hitBot);
+				bot.enemies.erase(&enemy);
 			}
 		}
 		else
 		{
 			if (b2Abs(b2Atan2(b2Cross(bot.getHeading(), hit), b2Dot(bot.getHeading(), hit))) < 0.5f * b2_pi)
 			{
-				RavenBot* hitBot = this->world->Raycast(botPos, hit, hit);
+				RavenBot* hitBot = this->world->RaycastBot(&bot, botPos, hit, hit);
 				if (hitBot)
 				{
+					auto hitbotTest = &bot;
 					bot.enemies.insert(hitBot);
 				}
 			}
 		}
 	}
+}
 
+void BotLogic::updateItems(RavenBot& bot)
+{
+	for(Item* item : this->gs->items)
+	{
+		b2Vec2 botPos = bot.getPosition();
+		b2Vec2 itemPos = item->getPosition();
+		b2Vec2 hit = itemPos - botPos;
+		if(bot.items.find(item) == bot.items.end())
+		{
+			if(b2Abs(b2Atan2(b2Cross(bot.getHeading(), hit), b2Dot(bot.getHeading(), hit))) < 0.5f * b2_pi)
+			{
+				Item* hitItem = this->world->RaycastItem(botPos, hit, hit);
+				if(hitItem)
+				{
+					bot.items.insert(hitItem);
+				}
+			}
+		}
+	}
+}
+
+void BotLogic::updateState(RavenBot& bot)
+{
 	switch (bot.getState())
 	{
 	case BotState::Wandering:
-	{
-		if(bot.enemies.empty())
 		{
-			if (bot.Health() < 65.f)
+			if(bot.enemies.empty())
 			{
-				bot.setState(BotState::GettingHealth);
-			}
-			else if (bot.Armor() < 65.f)
-			{
-				bot.setState(BotState::GettingArmor);
-			}
-			else if( (bot.RGAmmo() + bot.RLAmmo()) < 15u)
-			{
-				bot.setState(BotState::GettingAmmo);
-			}
-		}
-		else
-		{
-			if (bot.Health() < 65.f || bot.Armor() < 65.f)
-			{
-				bot.setState(BotState::Running);
+				if (bot.Health() < 65.f)
+				{
+					bot.setState(BotState::GettingHealth);
+				}
+				else if (bot.Armor() < 65.f)
+				{
+					bot.setState(BotState::GettingArmor);
+				}
+				else if( (bot.RGAmmo() + bot.RLAmmo()) < 15u)
+				{
+					bot.setState(BotState::GettingAmmo);
+				}
 			}
 			else
 			{
+				if (bot.Health() < 65.f || bot.Armor() < 65.f || (bot.RLAmmo() + bot.RGAmmo()) == 0u)
+				{
+					bot.setState(BotState::Running);
+				}
+				else
+				{
+					bot.setState(BotState::Attacking);
+				}
+			}
+			break;
+		}
+	case BotState::Attacking:
+		{
+			if (!bot.enemies.empty())
+			{
+				if (bot.Health() < 65.f || (bot.RGAmmo() + bot.RLAmmo()) == 0u)
+				{
+					bot.setState(BotState::Running);
+				}
+			}
+			else
+			{
+				bot.setState(BotState::Wandering);
+			}
+			break;
+		}
+	case BotState::Running:
+		{
+			if (bot.enemies.empty())
+			{
+				bot.setState(BotState::Wandering);
+			}
+			break;
+		}
+	case BotState::GettingAmmo:
+		{
+			if(!bot.enemies.empty() || bot.Hit())
+			{
 				bot.setState(BotState::Attacking);
 			}
-		}
-	}
-	case BotState::Attacking:
-	{
-		if (!bot.enemies.empty())
-		{
-			if (bot.Health() < 65.f || (bot.RGAmmo() + bot.RLAmmo()) == 0u)
+			else
 			{
-				bot.setState(BotState::Running);
+				if((bot.RGAmmo() + bot.RLAmmo()) > 40u)
+				{
+					bot.setState(BotState::Wandering);
+				}
 			}
+			break;
 		}
-		else
-		{
-			bot.setState(BotState::Wandering);
-		}
-	}
-	case BotState::Running:
-	{
-		if (bot.enemies.empty())
-		{
-			bot.setState(BotState::Wandering);
-		}
-	}
-	case BotState::GettingAmmo:
-	{
-		if(!bot.enemies.empty() || bot.Hit())
-		{
-			bot.setState(BotState::Attacking);
-		}
-		else
-		{
-			if((bot.RGAmmo() + bot.RLAmmo()) > 40u)
-			{
-				bot.setState(BotState::Wandering);
-			}
-		}
-	}
 	case BotState::GettingHealth:
-	{
-		if (!bot.enemies.empty())
 		{
-			bot.setState(BotState::Attacking);
-		}
-		else
-		{
-			if (bot.Hit())
+			if (!bot.enemies.empty())
 			{
-				bot.setState(BotState::Running);
+				bot.setState(BotState::Attacking);
 			}
-			else if (bot.Health() > 100.f)
+			else
 			{
-				bot.setState(BotState::Wandering);
+				if (bot.Hit())
+				{
+					bot.setState(BotState::Running);
+				}
+				else if (bot.Health() > 100.f)
+				{
+					bot.setState(BotState::Wandering);
+				}
 			}
+			break;
 		}
-	}
 	case BotState::GettingArmor:
-	{
-		if (!bot.enemies.empty())
 		{
-			bot.setState(BotState::Attacking);
-		}
-		else
-		{
-			if(bot.Hit())
+			if (!bot.enemies.empty())
 			{
-				bot.setState(BotState::Running);
+				bot.setState(BotState::Attacking);
 			}
-			else if(bot.Armor() > 200.f)
+			else
 			{
-				bot.setState(BotState::Wandering);
+				if(bot.Hit())
+				{
+					bot.setState(BotState::Running);
+				}
+				else if(bot.Armor() > 200.f)
+				{
+					bot.setState(BotState::Wandering);
+				}
 			}
+			break;
 		}
-	}
 	default:
 		break;
 	}
+}
+
+void BotLogic::pickItems(RavenBot& bot)
+{
+	auto items = this->world->getItems(&bot);
+	for(Item* item : items)
+	{
+		item->useItem(bot);
+		this->gs->UseItem(item);
+	}
+}
+
+void BotLogic::ResetBot(RavenBot& bot)
+{
+	b2Vec2 newPos = this->gs->GetRandomVertex(bot.getPosition(), 25.f)->Label().position;
+	bot.Respawn(newPos);
+}
+
+void BotLogic::updateBotState(RavenBot& bot)
+{
+	if(bot.IsDead())
+	{
+		this->ResetBot(bot);
+	}
+
+	this->updateEnemies(bot);
+	this->pickItems(bot);
+	this->updateItems(bot);
+	this->updateState(bot);
+	
+	bot.Reloading(SGE::delta_time);
 	bot.ClearHit();
+}
+
+void BotLogic::FireRG(RavenBot& bot)
+{
+	bot.FireRG();
+	b2Vec2 pos = bot.getPosition();
+	b2Vec2 direction = bot.getSteering()->getEnemy()->getPosition() - pos;
+	direction = b2Mul(b2Rot(this->randAngle()), direction);
+	b2Vec2 hitPos = b2Vec2_zero;
+	RavenBot* hitObject = this->world->RaycastBot(&bot, pos, direction, hitPos);
+	bot.RailgunTrace->setVisible(true);
+	b2Vec2 beam = hitPos - pos;
+	bot.RailgunTrace->setPosition(pos + 0.5f * beam);
+	bot.RailgunTrace->setOrientation(beam.Orientation());
+	bot.RailgunTrace->setShape(SGE::Shape::Rectangle(beam.Length(), 0.1f, true));
+
+	if(hitObject)
+	{
+		hitObject->Damage(RavenBot::RailgunDamage);
+	}
+}
+
+void BotLogic::FireRL(RavenBot& bot)
+{
 }
 
 void BotLogic::updateBot(RavenBot& bot)
 {
 	this->updateBotState(bot);
+
 	switch(bot.getState())
 	{
 	case BotState::Wandering:
+	{
+		if(!bot.IsFollowingPath())
 		{
-			if(!bot.IsFollowingPath())
+			GridVertex* begin = gs->GetVertex(bot.getPosition());
+			GridVertex* end = gs->GetRandomVertex(bot.getPosition(), 10.f);
+			bot.getSteering()->NewPath(std::move(this->gs->GetPath(begin, end)));
+		}
+	}
+	case BotState::Attacking:
+	{
+		if(!bot.getSteering()->getEnemy())
+		{
+			float dist = std::numeric_limits<float>::max();
+			b2Vec2 pos = bot.getPosition();
+			RavenBot* target = nullptr;
+			for(auto enemy : bot.enemies)
 			{
-				GridVertex* begin = gs->GetCell(bot.getPosition())->vertex;
-				GridVertex* end = gs->GetRandomVertex(bot.getPosition(), 5.f);
-				bot.getSteering()->NewPath(std::move(this->gs->GetPath(begin, end)));
+				float enemyDist = b2DistanceSquared(pos, enemy->getPosition());
+				if( enemyDist < dist)
+				{
+					dist = enemyDist;
+					target = enemy;
+				}
+			}
+			if(target)
+			{
+				bot.getSteering()->setEnemy(target);
+			}
+			else
+			{
+				break;
 			}
 		}
-	case BotState::Attacking: break;
-	case BotState::Running: break;
-	case BotState::GettingAmmo: break;
-	case BotState::GettingHealth: break;
-	case BotState::GettingArmor: break;
-	default: ;
+		const RavenBot* enemy = bot.getSteering()->getEnemy();
+		b2Vec2 direction = enemy->getPosition() - bot.getPosition();
+		float distance = direction.LengthSquared();
+		if(bot.CanFireRG())
+		{
+			this->FireRG(bot);
+		}
+		else if(bot.CanFireRL() && distance > Rocket::Radius()*Rocket::Radius())
+		{
+			this->FireRL(bot);
+		}
+		direction.Normalize();
+		bot.setHeading(direction);
+		break;
+	}
+	case BotState::Running:
+	{
+		break;
+	}
+	case BotState::GettingAmmo:
+	{
+		break;
+	}
+	case BotState::GettingHealth:
+	{
+		break;
+	}
+	case BotState::GettingArmor:
+	{
+		break;
+	}
+	default: break;
 	}
 }
 

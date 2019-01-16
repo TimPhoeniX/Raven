@@ -26,6 +26,13 @@ std::vector<SGE::Object*> World::getObstacles(b2Vec2 position, float radius)
 	return obs;
 }
 
+std::vector<Item*> World::getItems(RavenBot* const mover)
+{
+	std::vector<Item*> its;
+	this->items.CalculateNeighbours(its, mover->getPosition(), mover->getShape()->getRadius());
+	return its;
+}
+
 void World::getNeighbours(std::vector<RavenBot*>& res, RavenBot* const mover)
 {
 	return this->getNeighbours(res, mover, 10.f);
@@ -50,6 +57,21 @@ std::vector<std::pair<SGE::Object*, Edge>>& World::getWalls()
 void World::AddObstacle(SGE::Object* ob)
 {
 	this->obstacles.AddEntity(ob);
+}
+
+void World::AddItem(Item* i)
+{
+	this->items.AddEntity(i);
+}
+
+void World::RemoveObstacle(SGE::Object* ob)
+{
+	this->obstacles.RemoveEntity(ob);
+}
+
+void World::RemoveItem(Item* i)
+{
+	this->items.RemoveEntity(i);
 }
 
 void World::AddMover(RavenBot* mo)
@@ -108,12 +130,58 @@ void World::clear()
 	this->walls.clear();
 }
 
-RavenBot* World::Raycast(b2Vec2 from, b2Vec2 direction, b2Vec2& hit) const
+RavenBot* World::RaycastBot(RavenBot* caster, b2Vec2 from, b2Vec2 direction, b2Vec2& hit) const
 {
 	for(size_t index : Ray(from, direction, this->width, this->height, this->cellWidth, this->cellHeight))
 	{
 		b2Vec2 moverHit, obstacleHit;
-		RavenBot* hitMover = this->getHit(from, direction, moverHit, this->movers.getEntities(index));
+		RavenBot* hitMover = this->getHit(from, direction, moverHit, this->movers.getEntities(index), caster);
+		SGE::Object* hitObstacle = this->getHit(from, direction, obstacleHit, this->obstacles.getEntities(index));
+		if(hitMover && hitObstacle)
+		{
+			if(b2DistanceSquared(from, moverHit) < b2DistanceSquared(from, obstacleHit))
+			{
+				hit = moverHit;
+				return hitMover;
+			}
+			else
+			{
+				hit = obstacleHit;
+				return nullptr;
+			}
+		}
+		else if(hitMover)
+		{
+			hit = moverHit;
+			return hitMover;
+		}
+		else if(hitObstacle)
+		{
+			hit = obstacleHit;
+			return nullptr;
+		}
+	}
+	float minDistance = std::numeric_limits<float>::max();
+	float distance = minDistance;
+	b2Vec2 tempHit;
+	for(auto wall : this->walls)
+	{
+		LineIntersection(from, from + 1000.f * direction, wall.second.From(), wall.second.To(), distance, tempHit);
+		if(distance < minDistance)
+		{
+			hit = tempHit;
+			minDistance = distance;
+		}
+	}
+	return nullptr;
+}
+
+Item* World::RaycastItem(b2Vec2 from, b2Vec2 direction, b2Vec2& hit) const
+{
+	for(size_t index : Ray(from, direction, this->width, this->height, this->cellWidth, this->cellHeight))
+	{
+		b2Vec2 moverHit, obstacleHit;
+		Item* hitMover = this->getHit(from, direction, moverHit, this->items.getEntities(index));
 		SGE::Object* hitObstacle = this->getHit(from, direction, obstacleHit, this->obstacles.getEntities(index));
 		if(hitMover && hitObstacle)
 		{

@@ -21,14 +21,14 @@ public:
 	Rocket(b2Vec2 pos, b2Vec2 dir): Object(pos, true, getShape()), heading(dir)
 	{}
 
-	float Speed() const
+	constexpr static float Speed()
 	{
-		return this->speed;
+		return speed;
 	}
 
-	float Radius() const
+	constexpr static float Radius()
 	{
-		return this->radius;
+		return radius;
 	}
 
 	b2Vec2 Heading() const
@@ -40,41 +40,72 @@ public:
 class Item: public SGE::Object
 {
 public:
-	Item(b2Vec2 pos);
-	virtual void useItem(RavenBot*) = 0;
-	void Reset()
+	enum class IType: unsigned
 	{
-		this->visible = true;
+		Health, Armor, RLAmmo, RGAmmo
+	};
+protected:
+	constexpr static float itemCD = 15.f;
+	virtual void consumeItem(RavenBot&) = 0;
+	IType type;
+	float cd = itemCD;
+
+	Item(b2Vec2 pos, IType type);
+public:
+	void useItem(RavenBot&);
+
+
+	IType Type() const
+	{
+		return this->type;
+	}
+
+	void Reload(float delta)
+	{
+		if(this->cd > 0.f) this->cd -= delta;
+	}
+
+	bool Respawnable() const
+	{
+		return this->cd < 0.f;
+	}
+
+	void Respawn(b2Vec2 position)
+	{
+		this->setVisible(true);
+		this->setPosition(position);
 	}
 };
 
 class HealthPack: public Item
 {
+protected:
+	void consumeItem(RavenBot& bot) override;
 public:
 	HealthPack(b2Vec2 pos);
-	void useItem(RavenBot* bot) override;
 };
 
 class ArmorPack: public Item
 {
+protected:
+	void consumeItem(RavenBot& bot) override;
 public:
 	ArmorPack(b2Vec2 pos);
 
-	void useItem(RavenBot* bot) override;
 };
 
 class RailgunAmmo: public Item
 {
+protected:
+	void consumeItem(RavenBot& bot) override;
 public:
 	RailgunAmmo(b2Vec2 pos);
-
-	void useItem(RavenBot* bot) override;
 };
 
 class RocketAmmo: public Item
 {
+protected:
+	void consumeItem(RavenBot& bot) override;
 public:
 	RocketAmmo(b2Vec2 pos);
-
-	void useItem(RavenBot* bot) override;
 };

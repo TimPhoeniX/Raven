@@ -22,6 +22,16 @@
 #include <queue>
 #include "Graph.hpp"
 
+class RGTrace: public SGE::Object
+{
+public:
+	RGTrace(): Object(b2Vec2_zero, true)
+	{
+		this->Object::setVisible(false);
+	}
+	~RGTrace() = default;
+};
+
 class Distance
 {
 public:
@@ -58,8 +68,17 @@ GridCell* RavenGameState::GetCell(b2Vec2 pos)
 
 GridVertex* RavenGameState::GetVertex(b2Vec2 pos)
 {
-	size_t x = size_t(std::floor(pos.x)), y = size_t(std::floor(pos.y));
-	return cells[y][x].vertex;
+	GridVertex* res = this->GetCell(pos)->vertex;
+	if(!res)
+	{
+		b2Vec2 dir = {-0.5f, 0.f};
+		while(!res)
+		{
+			res = this->GetCell(pos + dir)->vertex;
+			dir = b2Mul(b2Rot(0.25f * b2_pi), dir);
+		}
+	}
+	return res;
 }
 
 GridVertex* RavenGameState::GetRandomVertex(const b2Vec2& position, const float limit)
@@ -76,6 +95,15 @@ Path RavenGameState::GetPath(GridVertex * begin, GridVertex * end)
 {
 	this->graph.AStar(begin, end, DiagonalDistance());
 	return Path(begin, end);
+}
+
+void RavenGameState::UseItem(Item* item)
+{
+	for(auto& bot: this->bots)
+	{
+		bot.items.erase(item);
+	}
+	this->world->RemoveItem(item);
 }
 
 bool RavenScene::init()
@@ -140,6 +168,7 @@ public:
 void RavenScene::loadScene()
 {
 	this->gs = new RavenGameState();
+	this->gs->world = &this->world;
 
 	//RenderBatches
 	SGE::BatchRenderer* renderer = SGE::Game::getGame()->getRenderer();
@@ -161,7 +190,7 @@ void RavenScene::loadScene()
 	this->gs->rocketBatch = renderer->getBatch(renderer->newBatch(basicProgram, beamPath, 30));
 	SGE::RealSpriteBatch* botBatch = renderer->getBatch(renderer->newBatch(basicProgram, zombieTexPath, 5));
 	SGE::RealSpriteBatch* graphTestBatch = renderer->getBatch(renderer->newBatch(basicProgram, cellTexPath, size_t(Width * Height), false, true));
-	SGE::RealSpriteBatch* graphEdgeTestBatch = renderer->getBatch(renderer->newBatch(basicProgram, beamPath, size_t(Width * Height * 8u), false, true));
+	SGE::RealSpriteBatch* graphEdgeTestBatch = renderer->getBatch(renderer->newBatch(basicProgram, "Resources/Textures/path.png", size_t(Width * Height * 8u), false, true));
 	QuadBatch* obBatch = dynamic_cast<QuadBatch*>(obstacleBatch);
 	if (!obBatch)
 		throw std::runtime_error("QuadBatch cast failed!");
@@ -434,22 +463,25 @@ void RavenScene::loadScene()
 		this->gs->bots.reserve(5);
 		decltype(this->gs->spawnPoints) pts = this->gs->spawnPoints;
 		std::random_shuffle(pts.begin(), pts.end());
-		for(int i = 0; i < 5; ++i)
+		for(int i = 0; i < 2; ++i)
 		{
 			this->gs->bots.emplace_back(pts[i]->vertex->Label().position, getCircle(), &this->world);
-			botBatch->addObject(&this->gs->bots.back());
-			this->world.AddMover(&this->gs->bots.back());
+			RavenBot* bot = &this->gs->bots.back();
+			botBatch->addObject(bot);
+			this->world.AddMover(bot);
+			bot->RailgunTrace = new RGTrace();
+			this->gs->railBatch->addObject(bot->RailgunTrace);
 		}
 	}
 
 	this->gs->InitRandomEngine();
 
 	//Logics
-	this->addLogic(new BotLogic(&this->world, this->gs));
 	this->addLogic(new SteeringBehavioursUpdate(&this->gs->bots));
 	this->addLogic(new SeparateBots(&this->world, &this->gs->bots));
 	this->addLogic(new MoveAwayFromObstacle(&this->world, this->gs->obstacles));
 	this->addLogic(new MoveAwayFromWall(&this->world, this->gs->bots));
+	this->addLogic(new BotLogic(&this->world, this->gs));
 }
 
 void RavenScene::unloadScene()

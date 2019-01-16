@@ -186,7 +186,7 @@ b2Vec2 SteeringBehaviours::ObstacleAvoidance()
 			b2Vec2 point;
 			for(auto& wall : qob->getEdges())
 			{
-				if(LineIntersection(owner->getPosition(), boxLength * owner->getHeading(),
+				if(LineIntersection(owner->getPosition(), owner->getPosition() + (boxLength * owner->getHeading()),
 									wall.From(), wall.To(), ip, point))
 				{
 					if(ip < closestDist)
@@ -207,7 +207,8 @@ b2Vec2 SteeringBehaviours::ObstacleAvoidance()
 		constexpr float BrakingWeight = 0.2f;
 		sForce.x = (closestObject->getShape()->getRadius() - closestLocalPos.x) * BrakingWeight;
 	}
-	return VectorToWorldSpace(sForce, owner->getHeading());
+	sForce = VectorToWorldSpace(sForce, owner->getHeading());
+	return sForce;
 }
 
 void SteeringBehaviours::CreateFeelers()
@@ -378,5 +379,36 @@ b2Vec2 SteeringBehaviours::Cohesion(const std::vector<RavenBot*>& neighbours) co
 
 b2Vec2 RavenSteering::CalculateForce()
 {
-	return this->FollowPath();
+	b2Vec2 sForce = b2Vec2_zero;
+	sForce += this->WallAvoidance();
+	sForce += this->ObstacleAvoidance();
+
+	if(!this->path.Empty())
+	{
+		sForce += this->FollowPath();
+	}
+
+	if(this->enemy)
+	{
+		if(this->owner->IsAttacking())
+		{
+			b2Vec2 direction = this->owner->getPosition() - this->enemy->getPosition();
+			float distance = direction.Normalize();
+			if(distance > 5.f)
+			{
+				sForce += this->Pursuit(this->enemy);
+			}
+			else
+			{
+				sForce += this->Evade(this->enemy);
+			}
+		}
+		else if(this->owner->IsRunning())
+		{
+			sForce += this->Evade(this->enemy);
+		}
+	}
+	
+	sForce += 0.1f * this->Wander();
+	return sForce;
 }

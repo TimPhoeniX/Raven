@@ -37,12 +37,14 @@ protected:
 public:
 	GridCell cells[Y][X];
 	GridGraph graph;
+	World* world = nullptr;
 	std::vector<GridCell*> spawnPoints;
 	std::vector<RavenBot> bots;
 	std::vector<Rocket*> rockets;
 	SGE::RealSpriteBatch* railBatch;
 	SGE::RealSpriteBatch* rocketBatch;
 	std::vector<SGE::Object*> obstacles;
+	std::set<Item*> items;
 
 	void InitRandomEngine();
 
@@ -51,6 +53,8 @@ public:
 	GridVertex* GetVertex(b2Vec2 pos);
 	GridVertex* GetRandomVertex(const b2Vec2& position, float x);
 	Path GetPath(GridVertex* begin, GridVertex* end);
+
+	void UseItem(Item* item);
 };
 
 class RavenScene : public SGE::Scene

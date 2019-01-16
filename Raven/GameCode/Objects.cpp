@@ -1,45 +1,50 @@
 ﻿#include "Objects.hpp"
 
-Item::Item(b2Vec2 pos): Object(pos, true, getCircle())
+Item::Item(b2Vec2 pos, Item::IType type): Object(pos, true, getCircle()), type(type)
 {
+	this->layer = 0.5f;
 }
 
-HealthPack::HealthPack(b2Vec2 pos): Item(pos)
-{
-}
 
-void HealthPack::useItem(RavenBot* bot)
+void Item::useItem(RavenBot& bot)
 {
 	this->visible = false;
-	bot->AddHealth(50.f);
+	this->position = b2Vec2_zero;
+	this->consumeItem(bot);
 }
 
-ArmorPack::ArmorPack(b2Vec2 pos): Item(pos)
+HealthPack::HealthPack(b2Vec2 pos): Item(pos, IType::Health)
 {
 }
 
-void ArmorPack::useItem(RavenBot* bot)
+void HealthPack::consumeItem(RavenBot& bot)
 {
-	this->visible = false;
-	bot->AddArmor(50.f);
+	bot.AddHealth(50.f);
 }
 
-RailgunAmmo::RailgunAmmo(b2Vec2 pos): Item(pos)
-{
-}
-
-void RailgunAmmo::useItem(RavenBot* bot)
-{
-	this->visible = false;
-	bot->AddRailgunAmmo(10u);
-}
-
-RocketAmmo::RocketAmmo(b2Vec2 pos): Item(pos)
+ArmorPack::ArmorPack(b2Vec2 pos): Item(pos, IType::Armor)
 {
 }
 
-void RocketAmmo::useItem(RavenBot* bot)
+void ArmorPack::consumeItem(RavenBot& bot)
 {
-	this->visible = false;
-	bot->AddRocketAmmo(15u);
+	bot.AddArmor(50.f);
+}
+
+RailgunAmmo::RailgunAmmo(b2Vec2 pos): Item(pos, IType::RGAmmo)
+{
+}
+
+void RailgunAmmo::consumeItem(RavenBot& bot)
+{
+	bot.AddRailgunAmmo(10u);
+}
+
+RocketAmmo::RocketAmmo(b2Vec2 pos): Item(pos, IType::RLAmmo)
+{
+}
+
+void RocketAmmo::consumeItem(RavenBot& bot)
+{
+	bot.AddRocketAmmo(15u);
 }

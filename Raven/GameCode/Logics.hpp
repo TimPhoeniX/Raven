@@ -10,6 +10,7 @@
 #include "RavenBot.hpp"
 #include "Objects.hpp"
 #include "World.hpp"
+#include <random>
 
 namespace SGE
 {
@@ -150,14 +151,25 @@ protected:
 	World* world;
 	RavenGameState* gs;
 
+	void updateEnemies(RavenBot& bot);
+	void updateItems(RavenBot& bot);
+	void updateState(RavenBot& bot);
+	void pickItems(RavenBot& bot);
+	void ResetBot(RavenBot& bot);
+	void updateBotState(RavenBot& bot);
+	void FireRG(RavenBot& bot);
+	void FireRL(RavenBot& bot);
+	void updateBot(RavenBot& bot);
+	
+	std::function<float(void)> randAngle;
 public:
 	explicit BotLogic(World* world, RavenGameState* gs)
 		: Logic(SGE::LogicPriority::Highest), world(world), gs(gs)
 	{
+		constexpr float spread = 0.01f;
+		randAngle = std::bind(std::uniform_real_distribution<float>{-spread * b2_pi, spread * b2_pi}, std::default_random_engine{std::random_device{}()});
 	}
 
-	void updateBotState(RavenBot& bot);
-	void updateBot(RavenBot& bot);
 	void performLogic() override;
 };
 #endif

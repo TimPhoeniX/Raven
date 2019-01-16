@@ -6,6 +6,7 @@
 class Path
 {
 	std::vector<b2Vec2> waypoints;
+	b2Vec2 point;
 public:
 	Path(GridVertex* begin, GridVertex* end)
 	{
@@ -14,6 +15,7 @@ public:
 			waypoints.push_back(end->Label().position);
 			end = end->Parent();
 		}
+		this->point = this->waypoints.back();
 	}
 	Path() = default;
 	Path(Path&&) = default;
@@ -24,19 +26,26 @@ public:
 
 	b2Vec2 CurrentWaypoint() const
 	{
-		return waypoints.back();
+		return point;
 	}
 	void SetNextWaypoint()
 	{
 		this->waypoints.pop_back();
+		if(!this->waypoints.empty())
+			this->point = this->waypoints.back();
 	}
 	bool Finished() const
 	{
-		return waypoints.size() <= 1u;
+		return waypoints.size() < 2u;
 	}
 
 	void Clear()
 	{
 		this->waypoints.clear();
+	}
+
+	bool Empty() const
+	{
+		return this->waypoints.empty();
 	}
 };

@@ -75,9 +75,14 @@ public:
 		this->path.Clear();
 	}
 
-	void setPlayer(const RavenBot*const player)
+	void setEnemy(const RavenBot* const enemy)
 	{
-		this->enemy = player;
+		this->enemy = enemy;
+	}
+
+	const RavenBot* getEnemy() const
+	{
+		return this->enemy;
 	}
 
 	std::vector<RavenBot*>& getNeighbours()

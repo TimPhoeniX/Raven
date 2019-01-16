@@ -88,3 +88,9 @@ inline b2Vec2 VectorToWorldSpace(const b2Vec2& vec, const b2Vec2& heading)
 {
 	return b2Mul(b2Rot(heading.Orientation()), vec);
 }
+
+
+inline std::ostream& operator<<(std::ostream& os, const b2Vec2& vec)
+{
+	return os << vec.x << ' ' << vec.y;
+}

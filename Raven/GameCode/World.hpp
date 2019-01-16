@@ -16,7 +16,7 @@ class World
 protected:
 	CellSpacePartition<RavenBot, partitionX, partitionY> movers;
 	CellSpacePartition<SGE::Object, partitionX, partitionY> obstacles;
-	CellSpacePartition<SGE::Object, partitionX, partitionY> items;
+	CellSpacePartition<Item, partitionX, partitionY> items;
 	std::vector<std::pair<SGE::Object*, Edge>> walls;
 	const float width, height, cellWidth, cellHeight;
 public:
@@ -63,6 +63,10 @@ public:
 	std::vector<std::pair<SGE::Object*, Edge>>& getWalls();
 
 	void AddObstacle(SGE::Object* ob);
+	void AddItem(Item* i);
+
+	void RemoveObstacle(SGE::Object* ob);
+	void RemoveItem(Item* i);
 
 	void AddMover(RavenBot* mo);
 
@@ -75,27 +79,50 @@ public:
 	void clear();
 
 	template<typename T>
-	T* getHit(b2Vec2 from, b2Vec2 direction, b2Vec2& hit, const std::vector<T*>& entities) const
+	T* getHit(b2Vec2 from, b2Vec2 direction, b2Vec2& hit, const std::vector<T*>& entities, T* ignore = nullptr) const
 	{
 		T* closestObject = nullptr;
 		float closestDist = std::numeric_limits<float>::max();
 		for(T* ob : entities)
 		{
-			b2Vec2 localPos = PointToLocalSpace(ob->getPosition(), direction, from);
-			float obRadius = ob->getShape()->getRadius();
-			if(localPos.x >= 0.f)
+			if(ob == ignore) continue;
+			if(ob->getShape()->getType() != SGE::ShapeType::Quad)
 			{
-				if(b2Abs(localPos.y) < obRadius)
+				b2Vec2 localPos = PointToLocalSpace(ob->getPosition(), direction, from);
+				float obRadius = ob->getShape()->getRadius();
+				if(localPos.x >= 0.f)
 				{
-					float cX = localPos.x, cY = localPos.y;
-					float sqrtPart = sqrt(obRadius*obRadius - cY*cY);
-					float ip = cX - sqrtPart;
-					if(ip <= 0.f) ip = cX + sqrtPart;
-					if(ip < closestDist)
+					if(b2Abs(localPos.y) < obRadius)
 					{
-						closestDist = ip;
-						closestObject = ob;
-						hit = PointToWorldSpace(b2Vec2{ip,0.f}, direction, from);
+						float cX = localPos.x, cY = localPos.y;
+						float sqrtPart = sqrt(obRadius*obRadius - cY*cY);
+						float ip = cX - sqrtPart;
+						if(ip <= 0.f) ip = cX + sqrtPart;
+						if(ip < closestDist)
+						{
+							closestDist = ip;
+							closestObject = ob;
+							hit = PointToWorldSpace(b2Vec2{ip,0.f}, direction, from);
+						}
+					}
+				}
+			}
+			else
+			{
+				QuadObstacle* qob = reinterpret_cast<QuadObstacle*>(ob);
+				if(!qob) continue;
+				float ip;
+				b2Vec2 point;
+				for(auto& wall : qob->getEdges())
+				{
+					if(LineIntersection(from, from + 1000.f * direction, wall.From(), wall.To(), ip, point))
+					{
+						if(ip < closestDist)
+						{
+							closestDist = ip;
+							closestObject = ob;
+							hit = point;
+						}
 					}
 				}
 			}
@@ -103,6 +130,8 @@ public:
 		return closestObject;
 	}
 
-	RavenBot* Raycast(b2Vec2 from, b2Vec2 direction, b2Vec2& hit) const;
+	RavenBot* RaycastBot(RavenBot* caster, b2Vec2 from, b2Vec2 direction, b2Vec2& hit) const;
+	Item* RaycastItem(b2Vec2 from, b2Vec2 direction, b2Vec2& hit) const;
 	void RemoveMover(RavenBot* hitObject);
+	std::vector<Item*> getItems(RavenBot* const mover);
 };

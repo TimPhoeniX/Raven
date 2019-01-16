@@ -1,9 +1,11 @@
 #pragma once
 #include <Object/sge_object.hpp>
-#include "SteeringBehaviours.hpp"
 #include <set>
+#include "SteeringBehaviours.hpp"
 
 class World;
+class RavenBot;
+class Item;
 
 enum class BotState: char
 {
@@ -17,13 +19,15 @@ enum class BotState: char
 
 class RavenBot: public SGE::Object
 {
-protected:
-	constexpr static float RailgunReload = 5.f;
+public:
+	constexpr static float RailgunReload = 10.f;
 	constexpr static float LauncherReload = 2.f;
 	constexpr static float RailgunDamage = 100.f;
 	constexpr static float LauncherDamage = 65.f;
+	constexpr static float DefaultHealth = 150.f;
+	constexpr static float DefaultArmor = 250.f;
 
-
+protected:
 	b2Vec2 velocity = b2Vec2_zero;
 	b2Vec2 heading = b2Vec2_zero;
 	b2Vec2 side = b2Vec2_zero;
@@ -32,8 +36,8 @@ protected:
 	float maxSpeed = 3.f;
 	float maxForce = 15.f;
 	float maxTurnRate = 90.f;
-	float health = 100.f;
-	float armor = 200.f;
+	float health = DefaultHealth;
+	float armor = DefaultArmor;
 	float rgCD = RailgunReload;
 	float rlCD = LauncherReload;
 	unsigned rgAmmo = 10u;
@@ -44,6 +48,7 @@ protected:
 	BotState state = BotState::Wandering;
 public:
 	std::set<RavenBot*> enemies;
+	std::set<Item*> items;
 	SGE::Object* RailgunTrace = nullptr;
 
 	RavenBot(const b2Vec2& position, SGE::Shape* shape, World* world, const b2Vec2& heading = b2Vec2{1.f,0.f})
@@ -144,8 +149,6 @@ public:
 		this->steering = steering;
 	}
 
-	void update(float delta);
-
 	float getSpeed() const
 	{
 		return this->velocity.Length();
@@ -166,13 +169,9 @@ public:
 		return this->state == BotState::Wandering;
 	}
 
-	bool IsDead() const
-	{
-		return false;
-	}
-
 	void setState(BotState state)
 	{
+		this->steering->ClearPath();
 		this->state = state;
 	}
 	
@@ -251,13 +250,68 @@ public:
 		this->rlAmmo += i;
 	}
 
-	BotState getState()
+	BotState getState() const
 	{
 		return this->state;
+	}
+
+	bool CanFireRG() const
+	{
+		return this->rgCD < 0;
+	}
+
+	bool CanFireRL() const
+	{
+		return this->rlCD < 0;
 	}
 
 	bool IsFollowingPath() const
 	{
 		return !this->getSteering()->getPath().Finished();
+	}
+	
+	void Reloading(float delta)
+	{
+		if(this->rgCD > 0.f) this->rgCD -= delta;
+		if(this->rlCD > 0.f) this->rlCD -= delta;
+		if(this->rgCD < (RailgunReload - 1.f))
+			this->RailgunTrace->setVisible(false);
+	}
+
+	void FireRG()
+	{
+		if(this->rgAmmo > 0u)
+		{
+			this->rgAmmo -= 1u;
+			this->rgCD = RailgunReload;
+		}
+	}
+
+	void FireLG()
+	{
+		if(this->rlAmmo > 0u)
+		{
+			this->rlAmmo -= 1u;
+			this->rlCD = LauncherReload;
+		}
+	}
+
+	bool IsDead() const
+	{
+		return this->health < 0.f;
+	}
+
+	void Respawn(b2Vec2 position)
+	{
+		this->setPosition(position);
+		this->health = DefaultHealth;
+		this->armor = DefaultArmor;
+		this->rgAmmo = 10u;
+		this->rlAmmo = 15u;
+		this->rgCD = RailgunReload;
+		this->rlCD = LauncherReload;
+		this->steering->ClearPath();
+		this->enemies.clear();
+		this->items.clear();
 	}
 };
