@@ -446,6 +446,14 @@ void BotLogic::ResetBot(RavenBot& bot)
 {
 	b2Vec2 newPos = this->gs->GetRandomVertex(bot.getPosition(), 25.f)->Label().position;
 	bot.Respawn(newPos);
+	for(auto& enemy : this->gs->bots)
+	{
+		enemy.enemies.erase(&bot);
+		if(&bot == enemy.getSteering()->getEnemy())
+		{
+			enemy.getSteering()->setEnemy(nullptr);
+		}
+	}
 }
 
 void BotLogic::updateBotState(RavenBot& bot)

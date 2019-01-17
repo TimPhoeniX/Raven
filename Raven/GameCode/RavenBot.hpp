@@ -311,6 +311,7 @@ public:
 		this->rgCD = RailgunReload;
 		this->rlCD = LauncherReload;
 		this->steering->ClearPath();
+		this->steering->setEnemy(nullptr);
 		this->enemies.clear();
 		this->items.clear();
 	}

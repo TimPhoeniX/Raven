@@ -380,8 +380,8 @@ b2Vec2 SteeringBehaviours::Cohesion(const std::vector<RavenBot*>& neighbours) co
 b2Vec2 RavenSteering::CalculateForce()
 {
 	b2Vec2 sForce = b2Vec2_zero;
-	sForce += this->WallAvoidance();
-	sForce += this->ObstacleAvoidance();
+	sForce += 0.5f * this->WallAvoidance();
+	sForce += 0.5f * this->ObstacleAvoidance();
 
 	if(!this->path.Empty())
 	{
@@ -402,13 +402,16 @@ b2Vec2 RavenSteering::CalculateForce()
 			{
 				sForce += this->Evade(this->enemy);
 			}
+			sForce += 2.f * this->Wander();
 		}
 		else if(this->owner->IsRunning())
 		{
 			sForce += this->Evade(this->enemy);
 		}
 	}
-	
-	sForce += 0.1f * this->Wander();
+	else
+	{
+		sForce += 0.2f * this->Wander();
+	}
 	return sForce;
 }

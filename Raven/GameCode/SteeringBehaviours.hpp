@@ -33,7 +33,7 @@ protected:
 	float wDistance = 4.f;
 	float wJitter = 15.f;
 	float boxLength = 8.f;
-	float32 WSDsq = 0.5f;
+	float32 WSDsq = 0.8f;
 	float total_space_time = 0.0f;
 	float alone_time = 0.0f;
 	void CreateFeelers();
