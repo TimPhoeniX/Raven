@@ -2,24 +2,27 @@
 
 #include <Object/sge_object.hpp>
 #include "RavenBot.hpp"
-#include "utility"
 #include "Utilities.hpp"
 
 class Rocket: public SGE::Object
 {
-	constexpr static float Width = 0.6f;
-	constexpr static float Height = 0.5f * Width;
-	constexpr static float speed = 3.f;
+	constexpr static float width = 0.8f;
+	constexpr static float height = 0.5f * width;
+	constexpr static float speed = 5.f;
 	constexpr static float radius = 4.f;
-	static SGE::Shape* getShape()
+	static SGE::Shape* Shape()
 	{
-		static SGE::Shape* defShape = SGE::Shape::Rectangle(Width, Height, false);
+		static SGE::Shape* defShape = SGE::Shape::Rectangle(Width(), Height(), false);
 		return defShape;
 	}
 	b2Vec2 heading = b2Vec2_zero;
+	bool primed = false;
 public:
-	Rocket(b2Vec2 pos, b2Vec2 dir): Object(pos, true, getShape()), heading(dir)
-	{}
+	Rocket(b2Vec2 pos, b2Vec2 dir): Object(pos, true, Shape()), heading(dir)
+	{
+		this->Rocket::setVisible(true);
+		this->setOrientation(this->heading.Orientation());
+	}
 
 	constexpr static float Speed()
 	{
@@ -34,6 +37,26 @@ public:
 	b2Vec2 Heading() const
 	{
 		return this->heading;
+	}
+
+	void Prime()
+	{
+		this->primed = true;
+	}
+
+	bool IsPrimed() const
+	{
+		return this->primed;
+	}
+
+	constexpr static float Width()
+	{
+		return  width;
+	}
+	
+	constexpr static float Height()
+	{
+		return  height;
 	}
 };
 
@@ -50,7 +73,7 @@ protected:
 	IType type;
 	float cd = itemCD;
 
-	Item(b2Vec2 pos, IType type);
+	Item(IType type);
 public:
 	void useItem(RavenBot&);
 
@@ -67,7 +90,7 @@ public:
 
 	bool Respawnable() const
 	{
-		return this->cd < 0.f;
+		return !this->getVisible() && this->cd < 0.f;
 	}
 
 	void Respawn(b2Vec2 position)
@@ -82,7 +105,7 @@ class HealthPack: public Item
 protected:
 	void consumeItem(RavenBot& bot) override;
 public:
-	HealthPack(b2Vec2 pos);
+	HealthPack();
 };
 
 class ArmorPack: public Item
@@ -90,7 +113,7 @@ class ArmorPack: public Item
 protected:
 	void consumeItem(RavenBot& bot) override;
 public:
-	ArmorPack(b2Vec2 pos);
+	ArmorPack();
 
 };
 
@@ -99,7 +122,7 @@ class RailgunAmmo: public Item
 protected:
 	void consumeItem(RavenBot& bot) override;
 public:
-	RailgunAmmo(b2Vec2 pos);
+	RailgunAmmo();
 };
 
 class RocketAmmo: public Item
@@ -107,5 +130,5 @@ class RocketAmmo: public Item
 protected:
 	void consumeItem(RavenBot& bot) override;
 public:
-	RocketAmmo(b2Vec2 pos);
+	RocketAmmo();
 };

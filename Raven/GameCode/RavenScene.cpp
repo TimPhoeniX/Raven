@@ -106,6 +106,34 @@ void RavenGameState::UseItem(Item* item)
 	this->world->RemoveItem(item);
 }
 
+void RavenGameState::NewRocket(b2Vec2 pos, b2Vec2 direction)
+{
+	direction.Normalize();
+	Rocket* rocket = new Rocket(pos + 0.5f * direction, direction);
+	this->world->AddObstacle(rocket);
+	this->rocketBatch->addObject(rocket);
+	this->rockets.push_back(rocket);
+}
+
+void RavenGameState::RemoveRocket(Rocket* rocket)
+{
+	this->world->RemoveObstacle(rocket);
+	this->rocketBatch->removeObject(rocket);
+	this->rockets.erase(std::find(this->rockets.begin(), this->rockets.end(), rocket));
+	delete rocket;
+}
+
+template <typename T>
+void RavenGameState::GenerateItems(const size_t bots, SGE::RealSpriteBatch* batch)
+{
+	for(size_t i = 0u; i < bots; ++i)
+	{
+		Item* item = new T();
+		batch->addObject(item);
+		this->items.push_back(item);
+	}
+}
+
 bool RavenScene::init()
 {
 	return true;
@@ -165,6 +193,8 @@ public:
 	{}
 };
 
+constexpr size_t Bots = 2u;
+
 void RavenScene::loadScene()
 {
 	this->gs = new RavenGameState();
@@ -181,16 +211,27 @@ void RavenScene::loadScene()
 	std::string zombieTexPath = "Resources/Textures/zombie.png";
 	std::string cellTexPath = "Resources/Textures/cell.png";
 	std::string beamPath = "Resources/Textures/pointer.png";
-	//Change
-	std::string rocketPath = "Resources/Textures/pointer.png";
+	std::string rocketPath = "Resources/Textures/rocket.png";
+	std::string healthPath = "Resources/Textures/health.png";
+	std::string armorPath = "Resources/Textures/armor.png";
+	std::string rlammoPath = "Resources/Textures/rlammo.png";
+	std::string rgammoPath = "Resources/Textures/rgammo.png";
 
 	SGE::RealSpriteBatch* wallBatch = renderer->getBatch(renderer->newBatch(scaleUVProgram, lightBrickTexPath, 4, false, true));
 	SGE::RealSpriteBatch* obstacleBatch = renderer->getBatch(renderer->newBatch<QuadBatch>(QuadProgram, lightBrickTexPath, 10, false, true));
-	this->gs->railBatch = renderer->getBatch(renderer->newBatch(basicProgram, beamPath, 5));
-	this->gs->rocketBatch = renderer->getBatch(renderer->newBatch(basicProgram, beamPath, 30));
-	SGE::RealSpriteBatch* botBatch = renderer->getBatch(renderer->newBatch(basicProgram, zombieTexPath, 5));
+	SGE::RealSpriteBatch* botBatch = renderer->getBatch(renderer->newBatch(basicProgram, zombieTexPath, Bots));
+
+	this->gs->railBatch = renderer->getBatch(renderer->newBatch(basicProgram, beamPath, Bots));
+	this->gs->rocketBatch = renderer->getBatch(renderer->newBatch(basicProgram, rocketPath, Bots * 20u));
+
+	SGE::RealSpriteBatch* healthBatch = renderer->getBatch(renderer->newBatch(basicProgram, healthPath, Bots));
+	SGE::RealSpriteBatch* armorBatch = renderer->getBatch(renderer->newBatch(basicProgram, armorPath, Bots));
+	SGE::RealSpriteBatch* rgammoBatch = renderer->getBatch(renderer->newBatch(basicProgram, rgammoPath, Bots));
+	SGE::RealSpriteBatch* rlammoBatch = renderer->getBatch(renderer->newBatch(basicProgram, rlammoPath, Bots));
+
 	SGE::RealSpriteBatch* graphTestBatch = renderer->getBatch(renderer->newBatch(basicProgram, cellTexPath, size_t(Width * Height), false, true));
 	SGE::RealSpriteBatch* graphEdgeTestBatch = renderer->getBatch(renderer->newBatch(basicProgram, "Resources/Textures/path.png", size_t(Width * Height * 8u), false, true));
+
 	QuadBatch* obBatch = dynamic_cast<QuadBatch*>(obstacleBatch);
 	if (!obBatch)
 		throw std::runtime_error("QuadBatch cast failed!");
@@ -200,7 +241,7 @@ void RavenScene::loadScene()
 	obstacleBatch->initializeIBO(IBO);
 	obstacleBatch->initializeSampler(GL_REPEAT, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR);
 
-	for (SGE::RealSpriteBatch* b : { wallBatch, this->gs->railBatch, this->gs->rocketBatch })
+	for (SGE::RealSpriteBatch* b : { wallBatch, this->gs->railBatch, this->gs->rocketBatch, healthBatch, armorBatch, rgammoBatch, rlammoBatch })
 	{
 		b->initializeIBO(IBO);
 		b->initializeSampler(sampler);
@@ -260,7 +301,7 @@ void RavenScene::loadScene()
 
 	//Grid
 //#define GraphCellDebug
-#define GraphEdgeDebug
+//#define GraphEdgeDebug
 	{
 		std::queue<GridCellBuild*> cells;
 		int intersections = 0;
@@ -460,10 +501,10 @@ void RavenScene::loadScene()
 	}
 	//Players
 	{
-		this->gs->bots.reserve(5);
+		this->gs->bots.reserve(Bots);
 		decltype(this->gs->spawnPoints) pts = this->gs->spawnPoints;
 		std::random_shuffle(pts.begin(), pts.end());
-		for(int i = 0; i < 2; ++i)
+		for(int i = 0; i < Bots; ++i)
 		{
 			this->gs->bots.emplace_back(pts[i]->vertex->Label().position, getCircle(), &this->world);
 			RavenBot* bot = &this->gs->bots.back();
@@ -473,7 +514,14 @@ void RavenScene::loadScene()
 			this->gs->railBatch->addObject(bot->RailgunTrace);
 		}
 	}
-
+	{
+		this->gs->GenerateItems<HealthPack>(Bots, healthBatch);
+		this->gs->GenerateItems<ArmorPack>(Bots, armorBatch);
+		this->gs->GenerateItems<RocketAmmo>(Bots, rlammoBatch);
+		this->gs->GenerateItems<RailgunAmmo>(Bots, rgammoBatch);
+	}
+	
+	
 	this->gs->InitRandomEngine();
 
 	//Logics
@@ -482,6 +530,8 @@ void RavenScene::loadScene()
 	this->addLogic(new MoveAwayFromObstacle(&this->world, this->gs->obstacles));
 	this->addLogic(new MoveAwayFromWall(&this->world, this->gs->bots));
 	this->addLogic(new BotLogic(&this->world, this->gs));
+	this->addLogic(new ItemLogic(&this->world, this->gs));
+	this->addLogic(new RocketLogic(this->gs, &this->world));
 }
 
 void RavenScene::unloadScene()

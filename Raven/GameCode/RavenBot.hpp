@@ -287,7 +287,7 @@ public:
 		}
 	}
 
-	void FireLG()
+	void FireRL()
 	{
 		if(this->rlAmmo > 0u)
 		{
@@ -304,6 +304,7 @@ public:
 	void Respawn(b2Vec2 position)
 	{
 		this->setPosition(position);
+		this->setState(BotState::Wandering);
 		this->health = DefaultHealth;
 		this->armor = DefaultArmor;
 		this->rgAmmo = 10u;
@@ -314,5 +315,10 @@ public:
 		this->steering->setEnemy(nullptr);
 		this->enemies.clear();
 		this->items.clear();
+	}
+
+	bool IsReloading() const
+	{
+		return (this->rgCD > 0.f && this->rlCD > 0.f);
 	}
 };

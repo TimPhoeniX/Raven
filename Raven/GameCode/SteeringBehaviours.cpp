@@ -385,8 +385,10 @@ b2Vec2 RavenSteering::CalculateForce()
 
 	if(!this->path.Empty())
 	{
-		sForce += this->FollowPath();
+		sForce += 2.f * this->FollowPath();
 	}
+	
+	this->owner->getWorld()->getNeighbours(this->neighbours, this->owner, 10.f);
 
 	if(this->enemy)
 	{
@@ -394,15 +396,17 @@ b2Vec2 RavenSteering::CalculateForce()
 		{
 			b2Vec2 direction = this->owner->getPosition() - this->enemy->getPosition();
 			float distance = direction.Normalize();
-			if(distance > 5.f)
+			if(distance > 10.f)
 			{
 				sForce += this->Pursuit(this->enemy);
+				sForce += 1.f * this->Wander();
 			}
 			else
 			{
-				sForce += this->Evade(this->enemy);
+				sForce += this->OffsetPursuit(this->enemy, PointToLocalSpace(this->enemy->getPosition() + (10.f * direction), this->enemy->getHeading(), this->enemy->getPosition()));
+				//sForce += 3.f * this->Separation(this->neighbours);
+				//sForce += 3.f * this->Wander();
 			}
-			sForce += 2.f * this->Wander();
 		}
 		else if(this->owner->IsRunning())
 		{

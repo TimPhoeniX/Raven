@@ -48,4 +48,9 @@ public:
 	{
 		return this->waypoints.empty();
 	}
+
+	b2Vec2 End() const
+	{
+		return !this->waypoints.empty() ? this->waypoints.front(): this->point;
+	}
 };

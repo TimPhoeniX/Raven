@@ -134,4 +134,5 @@ public:
 	Item* RaycastItem(b2Vec2 from, b2Vec2 direction, b2Vec2& hit) const;
 	void RemoveMover(RavenBot* hitObject);
 	std::vector<Item*> getItems(RavenBot* const mover);
+	void getRockets(std::vector<Rocket*>& bots, const b2Vec2& position, float radius);
 };

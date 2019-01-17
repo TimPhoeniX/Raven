@@ -33,6 +33,11 @@ std::vector<Item*> World::getItems(RavenBot* const mover)
 	return its;
 }
 
+void World::getRockets(std::vector<Rocket*>& bots, const b2Vec2& position, float radius)
+{
+	this->obstacles.CalculateRockets(bots, position, radius);
+}
+
 void World::getNeighbours(std::vector<RavenBot*>& res, RavenBot* const mover)
 {
 	return this->getNeighbours(res, mover, 10.f);

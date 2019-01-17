@@ -7,15 +7,17 @@
 #include <IO/Mouse/sge_mouse.hpp>
 #include <Utils/Timing/sge_fps_limiter.hpp>
 #include <vector>
+#include <random>
+
 #include "RavenBot.hpp"
 #include "Objects.hpp"
 #include "World.hpp"
-#include <random>
 
 namespace SGE
 {
 	class WorldElement;
 }
+class RavenGameState;
 class RavenBot;
 class Player;
 class World;
@@ -135,10 +137,10 @@ public:
 class RocketLogic: public SGE::Logic
 {
 protected:
-	std::vector<Rocket*>& rockets;
+	RavenGameState* gs;
 	World* world;
 public:
-	RocketLogic(std::vector<Rocket*> r, World* w);
+	RocketLogic(RavenGameState* gs, World* w);
 
 	void performLogic() override;
 };
@@ -159,17 +161,32 @@ protected:
 	void updateBotState(RavenBot& bot);
 	void FireRG(RavenBot& bot);
 	void FireRL(RavenBot& bot);
+	void UpdateEnemy(RavenBot& bot);
+	void GetItem(RavenBot& bot, Item::IType type);
 	void updateBot(RavenBot& bot);
 	
 	std::function<float(void)> randAngle;
 public:
-	explicit BotLogic(World* world, RavenGameState* gs)
+	BotLogic(World* world, RavenGameState* gs)
 		: Logic(SGE::LogicPriority::Highest), world(world), gs(gs)
 	{
-		constexpr float spread = 0.01f;
+		constexpr float spread = 0.02f;
 		randAngle = std::bind(std::uniform_real_distribution<float>{-spread * b2_pi, spread * b2_pi}, std::default_random_engine{std::random_device{}()});
 	}
 
 	void performLogic() override;
 };
+
+class ItemLogic: public SGE::Logic
+{
+protected:
+	World* world;
+	RavenGameState* gs;
+public:
+	ItemLogic(World* world, RavenGameState* gs)
+		: Logic(SGE::LogicPriority::High), world(world), gs(gs){}
+	
+	void performLogic() override;
+};
+
 #endif

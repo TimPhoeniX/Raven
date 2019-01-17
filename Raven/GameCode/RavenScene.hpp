@@ -8,7 +8,6 @@
 #include "GridGraph.hpp"
 #include "Objects.hpp"
 #include "Actions.hpp"
-#include "Actions.hpp"
 
 namespace SGE
 {
@@ -21,7 +20,6 @@ struct GridCell
 	{
 		Valid, Invalid
 	} state = Invalid;
-	SGE::Object* object = nullptr;
 	GridVertex* vertex = nullptr;
 };
 
@@ -38,13 +36,13 @@ public:
 	GridCell cells[Y][X];
 	GridGraph graph;
 	World* world = nullptr;
-	std::vector<GridCell*> spawnPoints;
-	std::vector<RavenBot> bots;
-	std::vector<Rocket*> rockets;
 	SGE::RealSpriteBatch* railBatch;
 	SGE::RealSpriteBatch* rocketBatch;
+	std::vector<GridCell*> spawnPoints;
 	std::vector<SGE::Object*> obstacles;
-	std::set<Item*> items;
+	std::vector<RavenBot> bots;
+	std::vector<Rocket*> rockets;
+	std::vector<Item*> items;
 
 	void InitRandomEngine();
 
@@ -55,6 +53,11 @@ public:
 	Path GetPath(GridVertex* begin, GridVertex* end);
 
 	void UseItem(Item* item);
+
+	template<typename T>
+	void GenerateItems(const size_t bots, SGE::RealSpriteBatch* batch);
+	void NewRocket(b2Vec2 pos, b2Vec2 direction);
+	void RemoveRocket(Rocket* rocket);
 };
 
 class RavenScene : public SGE::Scene

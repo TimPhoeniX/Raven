@@ -5,6 +5,7 @@
 #include <set>
 #include "Utilities.hpp"
 #include "QuadObject.hpp"
+#include "Objects.hpp"
 
 namespace
 {
@@ -165,6 +166,44 @@ public:
 		return id >= X*Y ? X*Y - 1u : id;
 	}
 
+	void CalculateRockets(std::vector<Rocket*>& res, b2Vec2 pos, float radius)
+	{
+		AABB query{pos - b2Vec2{radius,radius}, pos + b2Vec2{radius, radius}};
+		/*for(Cell<T>& cell : this->cells)
+		{
+		if(!cell.Entities.empty() && cell.aabb.isOverlapping(query))
+		{
+		for(T* en : cell.Entities)
+		{
+		if(b2DistanceSquared(en->getPosition(), pos) < radius*radius)
+		{
+		res.push_back(en);
+		}
+		}
+		}
+		}*/
+		std::set<Rocket*> setOfNeighbours;
+		AABBQuery list(this, query);
+		float radiusSum = 0.f;
+		for(size_t it : list)
+		{
+			auto& cell = this->cells[it];
+			if(!cell.Entities.empty() && cell.aabb.isOverlapping(query))
+			{
+				for(T* en : cell.Entities)
+				{
+					radiusSum = radius + en->getShape()->getRadius();
+					if(b2DistanceSquared(en->getPosition(), pos) < radiusSum*radiusSum)
+					{
+						Rocket* rocket = dynamic_cast<Rocket*>(en);
+						if(rocket) setOfNeighbours.insert(rocket);
+					}
+				}
+			}
+		}
+		res.assign(setOfNeighbours.begin(), setOfNeighbours.end());
+	}
+
 
 	static AABB getAABB(T* e)
 	{
@@ -259,4 +298,3 @@ public:
 		}
 	}
 };
-

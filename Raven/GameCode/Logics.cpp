@@ -9,11 +9,12 @@
 #include <IO/KeyboardState/sge_keyboard_state.hpp>
 #include <Utils/Timing/sge_fps_limiter.hpp>
 #include <Game/Director/sge_director.hpp>
+#include <Renderer/SpriteBatch/sge_sprite_batch.hpp>
 
 #include "RavenScene.hpp"
 #include "Utilities.hpp"
-#include "Renderer/SpriteBatch/sge_sprite_batch.hpp"
 #include "IntroScene.hpp"
+#include "Box2D/Dynamics/Contacts/b2ChainAndCircleContact.h"
 
 MoveAwayFromObstacle::MoveAwayFromObstacle(World* const world, const std::vector<SGE::Object*>& obstacles): Logic(SGE::LogicPriority::Highest), world(world), obstacles(obstacles)
 {
@@ -250,18 +251,118 @@ void WinCondition::performLogic()
 	}
 }
 
-RocketLogic::RocketLogic(std::vector<Rocket*> r, World* w): Logic(SGE::LogicPriority::High), rockets(r), world(w)
+RocketLogic::RocketLogic(RavenGameState* gs, World* w): Logic(SGE::LogicPriority::High), gs(gs), world(w)
 {
 }
 
 void RocketLogic::performLogic()
 {
-	for (Rocket* rocket: this->rockets)
+	if(this->gs->rockets.empty()) return;
+	for (Rocket* rocket: this->gs->rockets)
 	{
 		b2Vec2 velocity = rocket->Speed() * rocket->Heading();
 		auto oldPos = rocket->getPosition();
 		rocket->setPosition(oldPos + SGE::delta_time * velocity);
-		world->UpdateObstacle(rocket, oldPos);
+		this->world->UpdateObstacle(rocket, oldPos);
+		std::vector<RavenBot*> bots;
+		constexpr float hitRadius = 0.5f * Rocket::Height();
+		b2Vec2 hitSpot = rocket->getPosition() + (hitRadius * rocket->Heading());
+		this->world->getNeighbours(bots, hitSpot, hitRadius);
+		if(!bots.empty())
+		{
+			rocket->Prime();
+			continue;
+		}
+		auto obstacles = this->world->getObstacles(hitSpot, hitRadius);
+		for(SGE::Object* ob : obstacles)
+		{
+			if(ob == rocket) continue;
+			if(rocket->IsPrimed()) break;
+			auto& obShape = *ob->getShape();
+			switch(obShape.getType())
+			{
+			case SGE::ShapeType::Rectangle:
+			{
+				b2Vec2 hitVec = PointToLocalSpace(hitSpot, b2Mul(b2Rot(ob->getOrientation()), {1.f, 0.f}), ob->getPosition());
+				b2Vec2 halves = 0.5f * ob->getScale();
+				b2Vec2 penPoint = b2Clamp(hitVec, -halves, halves);
+				if(b2DistanceSquared(penPoint, hitSpot) < hitRadius * hitRadius)
+				{
+					rocket->Prime();
+				}
+				break;
+			}
+			case SGE::ShapeType::Circle:
+			{
+				b2Vec2 toMover = hitSpot - ob->getPosition();
+				float dist = toMover.Length();
+				float radius = hitRadius + obShape.getRadius();
+				if(dist < radius)
+				{
+					rocket->Prime();
+				}
+				break;
+			}
+			case SGE::ShapeType::None: break;
+			case SGE::ShapeType::Quad:
+			{
+				for(auto& wall : reinterpret_cast<QuadObstacle*>(ob)->getEdges())
+				{
+					if(PointToLineDistance(hitSpot, wall.From(), wall.To()) < hitRadius)
+					{
+						float dist;
+						b2Vec2 intersect;
+						b2Vec2 radius = hitRadius * -wall.Normal();
+						if(LineIntersection(hitSpot, hitSpot + radius, wall.From(), wall.To(), dist, intersect))
+						{
+							rocket->Prime();
+						}
+					}
+				}
+				break;
+			}
+			default: break;
+			}
+		}
+		if(rocket->IsPrimed()) continue;
+		for(std::pair<SGE::Object*, Edge>& wall : this->world->getWalls())
+		{
+			if(PointToLineDistance(hitSpot, wall.second.From(), wall.second.To()) < hitRadius)
+			{
+				float dist;
+				b2Vec2 intersect;
+				b2Vec2 radius = hitRadius * -wall.second.Normal();
+				if(LineIntersection(hitSpot, hitSpot + radius, wall.second.From(), wall.second.To(), dist, intersect))
+				{
+					rocket->Prime();
+					break;
+				}
+			}
+		}
+	}
+	std::stack<Rocket*> primed;
+	for(Rocket* rocket : this->gs->rockets)
+	{
+		if(!rocket->IsPrimed()) continue;
+		primed.push(rocket);
+	}
+	while(!primed.empty())
+	{
+		Rocket* rocket = primed.top();
+		std::vector<RavenBot*> bots;
+		this->world->getNeighbours(bots, rocket->getPosition(), Rocket::Radius());
+		for(RavenBot* bot : bots)
+		{
+			bot->Damage(RavenBot::LauncherDamage);
+		}
+		std::vector<Rocket*> rockets;
+		this->world->getRockets(rockets, rocket->getPosition(), Rocket::Radius());
+		for(Rocket* otherRocket : rockets)
+		{
+			otherRocket->Prime();
+		}
+		this->gs->RemoveRocket(rocket);
+		primed.pop();
 	}
 }
 
@@ -276,9 +377,11 @@ void BotLogic::updateEnemies(RavenBot& bot)
 		if(bot.enemies.find(&enemy) != bot.enemies.end())
 		{
 			RavenBot* hitBot = this->world->RaycastBot(&bot, botPos, hit, hit);
-			if (!hitBot)
+			if(!hitBot)
 			{
 				bot.enemies.erase(&enemy);
+				if(&enemy == bot.getSteering()->getEnemy())
+					bot.getSteering()->setEnemy(nullptr);
 			}
 		}
 		else
@@ -476,7 +579,7 @@ void BotLogic::FireRG(RavenBot& bot)
 {
 	bot.FireRG();
 	b2Vec2 pos = bot.getPosition();
-	b2Vec2 direction = bot.getSteering()->getEnemy()->getPosition() - pos;
+	b2Vec2 direction = bot.getHeading();
 	direction = b2Mul(b2Rot(this->randAngle()), direction);
 	b2Vec2 hitPos = b2Vec2_zero;
 	RavenBot* hitObject = this->world->RaycastBot(&bot, pos, direction, hitPos);
@@ -494,6 +597,74 @@ void BotLogic::FireRG(RavenBot& bot)
 
 void BotLogic::FireRL(RavenBot& bot)
 {
+	bot.FireRL();
+	b2Vec2 pos = bot.getPosition();
+	b2Vec2 direction = bot.getHeading();
+	direction = b2Mul(b2Rot(this->randAngle()), direction);
+	this->gs->NewRocket(pos, direction);
+}
+
+void BotLogic::UpdateEnemy(RavenBot& bot)
+{
+	float dist = std::numeric_limits<float>::max();
+	b2Vec2 pos = bot.getPosition();
+	RavenBot* target = nullptr;
+	for(auto enemy : bot.enemies)
+	{
+		float enemyDist = b2DistanceSquared(pos, enemy->getPosition());
+		if( enemyDist < dist)
+		{
+			dist = enemyDist;
+			target = enemy;
+		}
+	}
+	if(target)
+	{
+		bot.getSteering()->setEnemy(target);
+	}
+}
+
+void BotLogic::GetItem(RavenBot& bot, Item::IType type)
+{
+	b2Vec2 pos = bot.getPosition();
+	Item* closestItem = nullptr;
+	float distance = std::numeric_limits<float>::max();
+	for(Item* item : bot.items)
+	{
+		if(item->Type() == type)
+		{
+			float newDist = b2DistanceSquared(pos, item->getPosition());
+			if(newDist < distance)
+			{
+				closestItem = item;
+				distance = newDist;
+			}
+		}
+	}
+	if(closestItem)
+	{
+		if(!bot.IsFollowingPath())
+		{
+			GridVertex* begin = gs->GetVertex(pos);
+			GridVertex* end = gs->GetVertex(closestItem->getPosition());
+			bot.getSteering()->NewPath(std::move(this->gs->GetPath(begin, end)));
+		}
+		else if(b2DistanceSquared(closestItem->getPosition(), bot.getSteering()->getPath().End()) > 0.1)
+		{
+			GridVertex* begin = gs->GetVertex(pos);
+			GridVertex* end = gs->GetVertex(closestItem->getPosition());
+			bot.getSteering()->NewPath(std::move(this->gs->GetPath(begin, end)));
+		}
+	}
+	else
+	{
+		if(!bot.IsFollowingPath())
+		{
+			GridVertex* begin = gs->GetVertex(pos);
+			GridVertex* end = gs->GetRandomVertex(pos, 20.f);
+			bot.getSteering()->NewPath(std::move(this->gs->GetPath(begin, end)));
+		}
+	}
 }
 
 void BotLogic::updateBot(RavenBot& bot)
@@ -515,56 +686,55 @@ void BotLogic::updateBot(RavenBot& bot)
 	{
 		if(!bot.getSteering()->getEnemy())
 		{
-			float dist = std::numeric_limits<float>::max();
-			b2Vec2 pos = bot.getPosition();
-			RavenBot* target = nullptr;
-			for(auto enemy : bot.enemies)
-			{
-				float enemyDist = b2DistanceSquared(pos, enemy->getPosition());
-				if( enemyDist < dist)
-				{
-					dist = enemyDist;
-					target = enemy;
-				}
-			}
-			if(target)
-			{
-				bot.getSteering()->setEnemy(target);
-			}
-			else
-			{
-				break;
-			}
+			UpdateEnemy(bot);
 		}
 		const RavenBot* enemy = bot.getSteering()->getEnemy();
+		if(!enemy) break;
 		b2Vec2 direction = enemy->getPosition() - bot.getPosition();
-		float distance = direction.LengthSquared();
+		float distance = direction.Normalize();
+		bot.setHeading(direction);
 		if(bot.CanFireRG())
 		{
 			this->FireRG(bot);
 		}
-		else if(bot.CanFireRL() && distance > Rocket::Radius()*Rocket::Radius())
+		else if(bot.CanFireRL() && distance > Rocket::Radius())
 		{
 			this->FireRL(bot);
-		}
-		direction.Normalize();
-		bot.setHeading(direction);
+		};
 		break;
 	}
 	case BotState::Running:
 	{
-		break;
+		if(!bot.getSteering()->getEnemy())
+		{
+			UpdateEnemy(bot);
+		}
+		const RavenBot* enemy = bot.getSteering()->getEnemy();
+		if(!enemy || !bot.IsFollowingPath()) break;
+		GridVertex* begin = this->gs->GetVertex(bot.getPosition());
+		GridVertex* end = this->gs->GetRandomVertex(enemy->getPosition(), 30.f);
+		bot.getSteering()->NewPath(this->gs->GetPath(begin, end));
 	}
 	case BotState::GettingAmmo:
 	{
+		if(bot.RGAmmo() < bot.RLAmmo())
+		{
+			this->GetItem(bot, Item::IType::RGAmmo);
+		}
+		else
+		{
+			this->GetItem(bot, Item::IType::RLAmmo);
+		}
 		break;
 	}
 	case BotState::GettingHealth:
 	{
+		this->GetItem(bot, Item::IType::Health);
 		break;
 	}
 	case BotState::GettingArmor:
 	{
+		this->GetItem(bot, Item::IType::Armor);
 		break;
 	}
 	default: break;
@@ -576,5 +746,21 @@ void BotLogic::performLogic()
 	for(RavenBot& bot: this->gs->bots)
 	{
 		this->updateBot(bot);
+	}
+}
+
+void ItemLogic::performLogic()
+{
+	for(Item* item : this->gs->items)
+	{
+		if(item->Respawnable())
+		{
+			item->Respawn(this->gs->GetRandomVertex(item->getPosition(), 20.f)->Label().position);
+			this->world->AddItem(item);
+		}
+		else if(!item->getVisible())
+		{
+			item->Reload(SGE::delta_time);
+		}
 	}
 }
