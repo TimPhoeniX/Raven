@@ -123,22 +123,9 @@ public:
 		}
 	}
 
-	void CalculateNeighbours(std::vector<T*>& res, b2Vec2 pos, const float radius)
+	std::set<T*> CalculateNeighbours(b2Vec2 pos, const float radius)
 	{
 		AABB query{pos - b2Vec2{radius,radius}, pos + b2Vec2{radius, radius}};
-		/*for(Cell<T>& cell : this->cells)
-		{
-			if(!cell.Entities.empty() && cell.aabb.isOverlapping(query))
-			{
-				for(T* en : cell.Entities)
-				{
-					if(b2DistanceSquared(en->getPosition(), pos) < radius*radius)
-					{
-						res.push_back(en);
-					}
-				}
-			}
-		}*/
 		std::set<T*> setOfNeighbours;
 		AABBQuery list(this, query);
 		float radiusSum = 0.f;
@@ -157,7 +144,7 @@ public:
 				}
 			}
 		}
-		res.assign(setOfNeighbours.begin(), setOfNeighbours.end());
+		return setOfNeighbours;
 	}
 
 	size_t PosToIndex(b2Vec2 pos) const

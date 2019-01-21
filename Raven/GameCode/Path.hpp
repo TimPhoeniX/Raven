@@ -15,7 +15,8 @@ public:
 			waypoints.push_back(end->Label().position);
 			end = end->Parent();
 		}
-		this->point = this->waypoints.back();
+		if(!waypoints.empty())
+			this->point = this->waypoints.back();
 	}
 	Path() = default;
 	Path(Path&&) = default;

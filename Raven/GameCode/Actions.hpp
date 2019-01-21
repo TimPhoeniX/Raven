@@ -12,20 +12,6 @@ namespace SGE
 	class Logic;
 }
 
-class Shoot : public SGE::Action
-{
-protected:
-	Aim* shootLogic = nullptr;
-public:
-	explicit Shoot(Aim* shootLogic);
-
-	void action_begin() override;
-
-	void action_main() override;
-
-	void action_ends() override;
-};
-
 class GOTO : public SGE::Action
 {
 	SGE::Object* object = nullptr;

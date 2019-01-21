@@ -182,6 +182,7 @@ b2Vec2 SteeringBehaviours::ObstacleAvoidance()
 		else
 		{
 			QuadObstacle* qob = reinterpret_cast<QuadObstacle*>(ob);
+			if(!qob) continue;
 			float ip;
 			b2Vec2 point;
 			for(auto& wall : qob->getEdges())
@@ -202,10 +203,23 @@ b2Vec2 SteeringBehaviours::ObstacleAvoidance()
 	b2Vec2 sForce = b2Vec2_zero;
 	if(closestObject)
 	{
-		float mp = 1.f + (this->boxLength - closestLocalPos.x) / this->boxLength;
-		sForce.y = (closestObject->getShape()->getRadius() - closestLocalPos.y) * mp;
-		constexpr float BrakingWeight = 0.2f;
-		sForce.x = (closestObject->getShape()->getRadius() - closestLocalPos.x) * BrakingWeight;
+		auto qob = reinterpret_cast<QuadObstacle*>(closestObject);
+		if(qob)
+		{
+			std::vector<std::pair<SGE::Object*, Edge>> Vector;
+			for(auto edge : qob->getEdges())
+			{
+				Vector.emplace_back(qob, edge);
+			}
+			return this->WallAvoidanceImp(Vector);
+		}
+		else
+		{
+			float mp = 1.f + (this->boxLength - closestLocalPos.x) / this->boxLength;
+			sForce.y = (closestObject->getShape()->getRadius() - closestLocalPos.y) * mp;
+			constexpr float BrakingWeight = 0.2f;
+			sForce.x = (closestObject->getShape()->getRadius() - closestLocalPos.x) * BrakingWeight;
+		}
 	}
 	sForce = VectorToWorldSpace(sForce, owner->getHeading());
 	return sForce;
@@ -381,7 +395,7 @@ b2Vec2 RavenSteering::CalculateForce()
 {
 	b2Vec2 sForce = b2Vec2_zero;
 	sForce += 0.5f * this->WallAvoidance();
-	sForce += 0.5f * this->ObstacleAvoidance();
+	sForce += 1.5f * this->ObstacleAvoidance();
 
 	if(!this->path.Empty())
 	{
@@ -404,8 +418,6 @@ b2Vec2 RavenSteering::CalculateForce()
 			else
 			{
 				sForce += this->OffsetPursuit(this->enemy, PointToLocalSpace(this->enemy->getPosition() + (10.f * direction), this->enemy->getHeading(), this->enemy->getPosition()));
-				//sForce += 3.f * this->Separation(this->neighbours);
-				//sForce += 3.f * this->Wander();
 			}
 		}
 		else if(this->owner->IsRunning())

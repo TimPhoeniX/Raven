@@ -67,6 +67,12 @@ void MoveAwayFromObstacle::performLogic()
 							intersect -= pos + radius;
 							mo->setPosition(pos + intersect);
 						}
+						else if(b2DistanceSquared(wall.From(), pos) < fradius * fradius)
+						{
+							radius = pos - wall.From();
+							float pen = radius.Normalize();
+							mo->setPosition(pos + ((fradius - pen) * radius));
+						}
 					}
 				}
 			}
@@ -183,74 +189,6 @@ void OnKey::performLogic()
 	}
 }
 
-Aim::Aim(World* world, SGE::Object* aimer, SGE::MouseObject* mouse, SGE::Camera2d* cam, std::size_t& counter, SGE::Object* pointer)
-	: Logic(SGE::LogicPriority::High), world(world), aimer(aimer), mouse(mouse), cam(cam), counter(counter), pointer(pointer)
-{
-}
-
-bool Aim::aim(b2Vec2 pos, b2Vec2 direction)
-{
-	b2Vec2 hitPos = b2Vec2_zero;
-	RavenBot* hitObject = this->world->RaycastBot(nullptr, pos, direction, hitPos);
-	this->pointer->setVisible(true);
-	b2Vec2 beam = hitPos - pos;
-	this->pointer->setPosition(pos + 0.5f * beam);
-	this->pointer->setOrientation(beam.Orientation());
-	this->pointer->setShape(SGE::Shape::Rectangle(beam.Length(), 0.05f, true));
-
-	if(hitObject)
-	{
-		//HitLogic
-		//hitObject->setState(BotState::Dead);
-		hitObject->setLayer(0.2f);
-		this->world->RemoveMover(hitObject);
-		++this->counter;
-	}
-	return nullptr != hitObject;
-}
-
-void Aim::performLogic()
-{
-	auto dir = this->cam->screenToWorld(this->mouse->getMouseCoords()) - this->aimer->getPositionGLM();
-	b2Vec2 direction{dir.x, dir.y};
-	direction.Normalize();
-	this->aimer->setOrientation(direction.Orientation());
-	if(reload > 0.f)
-	{
-		reload -= SGE::delta_time;
-		if(reload < 0.f)
-			this->pointer->setVisible(false);
-	}
-	if(this->fired)
-	{
-		this->fired = false;
-		b2Vec2 pos = this->aimer->getPosition();
-		aim(pos, direction);
-	}
-}
-
-void Aim::Shoot()
-{
-	if (!this->fired && this->reload < 0)
-	{
-		this->fired = true;
-		this->reload = 1.f;
-	}
-}
-
-WinCondition::WinCondition(size_t& zombies, size_t& killedZombies, SGE::Scene* endGame, Player* player)
-	: Logic(SGE::LogicPriority::Low), zombies(zombies), killedZombies(killedZombies), endGame(endGame), player(player)
-{}
-
-void WinCondition::performLogic()
-{
-	if(false)
-	{
-		reinterpret_cast<EndScene*>(endGame)->won = (zombies == killedZombies);
-		this->sendAction(new Load(endGame));
-	}
-}
-
 RocketLogic::RocketLogic(RavenGameState* gs, World* w): Logic(SGE::LogicPriority::High), gs(gs), world(w)
 {
 }
@@ -263,7 +201,7 @@ void RocketLogic::performLogic()
 		b2Vec2 velocity = rocket->Speed() * rocket->Heading();
 		auto oldPos = rocket->getPosition();
 		rocket->setPosition(oldPos + SGE::delta_time * velocity);
-		this->world->UpdateObstacle(rocket, oldPos);
+		this->world->UpdateRocket(rocket, oldPos);
 		std::vector<RavenBot*> bots;
 		constexpr float hitRadius = 0.5f * Rocket::Height();
 		b2Vec2 hitSpot = rocket->getPosition() + (hitRadius * rocket->Heading());
@@ -355,13 +293,29 @@ void RocketLogic::performLogic()
 		{
 			bot->Damage(RavenBot::LauncherDamage);
 		}
-		std::vector<Rocket*> rockets;
-		this->world->getRockets(rockets, rocket->getPosition(), Rocket::Radius());
+		std::vector<Rocket*> rockets(this->world->getRockets(rocket->getPosition(), Rocket::Radius()));
 		for(Rocket* otherRocket : rockets)
 		{
 			otherRocket->Prime();
 		}
 		this->gs->RemoveRocket(rocket);
+		primed.pop();
+	}
+	for(Rocket* explosion: this->gs->explosions)
+	{
+		if(explosion->RemainingTime() > 0.f)
+		{
+			explosion->Expire(SGE::delta_time);
+		}
+		else
+		{
+			primed.push(explosion);
+		}
+	}
+	while(!primed.empty())
+	{
+		Rocket* rocket = primed.top();
+		this->gs->RemoveExplosion(rocket);
 		primed.pop();
 	}
 }
@@ -374,6 +328,7 @@ void BotLogic::updateEnemies(RavenBot& bot)
 		b2Vec2 botPos = bot.getPosition();
 		b2Vec2 enemyPos = enemy.getPosition();
 		b2Vec2 hit = enemyPos - botPos;
+		hit.Normalize();
 		if(bot.enemies.find(&enemy) != bot.enemies.end())
 		{
 			RavenBot* hitBot = this->world->RaycastBot(&bot, botPos, hit, hit);
@@ -386,12 +341,11 @@ void BotLogic::updateEnemies(RavenBot& bot)
 		}
 		else
 		{
-			if (b2Abs(b2Atan2(b2Cross(bot.getHeading(), hit), b2Dot(bot.getHeading(), hit))) < 0.5f * b2_pi)
+			if (b2Abs(b2Atan2(b2Cross(bot.getHeading(), hit), b2Dot(bot.getHeading(), hit))) < 0.25f * b2_pi)
 			{
 				RavenBot* hitBot = this->world->RaycastBot(&bot, botPos, hit, hit);
-				if (hitBot)
+				if(hitBot)
 				{
-					auto hitbotTest = &bot;
 					bot.enemies.insert(hitBot);
 				}
 			}
@@ -408,7 +362,7 @@ void BotLogic::updateItems(RavenBot& bot)
 		b2Vec2 hit = itemPos - botPos;
 		if(bot.items.find(item) == bot.items.end())
 		{
-			if(b2Abs(b2Atan2(b2Cross(bot.getHeading(), hit), b2Dot(bot.getHeading(), hit))) < 0.5f * b2_pi)
+			if(b2Abs(b2Atan2(b2Cross(bot.getHeading(), hit), b2Dot(bot.getHeading(), hit))) < 0.25f * b2_pi)
 			{
 				Item* hitItem = this->world->RaycastItem(botPos, hit, hit);
 				if(hitItem)
@@ -471,7 +425,7 @@ void BotLogic::updateState(RavenBot& bot)
 		}
 	case BotState::Running:
 		{
-			if (bot.enemies.empty())
+			if(bot.enemies.empty())
 			{
 				bot.setState(BotState::Wandering);
 			}
@@ -494,17 +448,13 @@ void BotLogic::updateState(RavenBot& bot)
 		}
 	case BotState::GettingHealth:
 		{
-			if (!bot.enemies.empty())
+			if (!bot.enemies.empty() || bot.Hit())
 			{
 				bot.setState(BotState::Attacking);
 			}
 			else
 			{
-				if (bot.Hit())
-				{
-					bot.setState(BotState::Running);
-				}
-				else if (bot.Health() > 100.f)
+				if (bot.Health() > 100.f)
 				{
 					bot.setState(BotState::Wandering);
 				}
@@ -513,17 +463,13 @@ void BotLogic::updateState(RavenBot& bot)
 		}
 	case BotState::GettingArmor:
 		{
-			if (!bot.enemies.empty())
+			if (!bot.enemies.empty(), bot.Hit())
 			{
 				bot.setState(BotState::Attacking);
 			}
 			else
 			{
-				if(bot.Hit())
-				{
-					bot.setState(BotState::Running);
-				}
-				else if(bot.Armor() > 200.f)
+				if(bot.Armor() > 200.f)
 				{
 					bot.setState(BotState::Wandering);
 				}
@@ -547,7 +493,7 @@ void BotLogic::pickItems(RavenBot& bot)
 
 void BotLogic::ResetBot(RavenBot& bot)
 {
-	b2Vec2 newPos = this->gs->GetRandomVertex(bot.getPosition(), 25.f)->Label().position;
+	b2Vec2 newPos = this->gs->GetRandomVertex(bot.getPosition(), 30.f, false)->Label().position;
 	bot.Respawn(newPos);
 	for(auto& enemy : this->gs->bots)
 	{
@@ -577,7 +523,7 @@ void BotLogic::updateBotState(RavenBot& bot)
 
 void BotLogic::FireRG(RavenBot& bot)
 {
-	bot.FireRG();
+	if(!bot.FireRG()) return;
 	b2Vec2 pos = bot.getPosition();
 	b2Vec2 direction = bot.getHeading();
 	direction = b2Mul(b2Rot(this->randAngle()), direction);
@@ -597,7 +543,7 @@ void BotLogic::FireRG(RavenBot& bot)
 
 void BotLogic::FireRL(RavenBot& bot)
 {
-	bot.FireRL();
+	if(!bot.FireRL()) return;
 	b2Vec2 pos = bot.getPosition();
 	b2Vec2 direction = bot.getHeading();
 	direction = b2Mul(b2Rot(this->randAngle()), direction);
@@ -661,7 +607,7 @@ void BotLogic::GetItem(RavenBot& bot, Item::IType type)
 		if(!bot.IsFollowingPath())
 		{
 			GridVertex* begin = gs->GetVertex(pos);
-			GridVertex* end = gs->GetRandomVertex(pos, 20.f);
+			GridVertex* end = gs->GetRandomVertex(pos,25,true);
 			bot.getSteering()->NewPath(std::move(this->gs->GetPath(begin, end)));
 		}
 	}
@@ -678,9 +624,10 @@ void BotLogic::updateBot(RavenBot& bot)
 		if(!bot.IsFollowingPath())
 		{
 			GridVertex* begin = gs->GetVertex(bot.getPosition());
-			GridVertex* end = gs->GetRandomVertex(bot.getPosition(), 10.f);
+			GridVertex* end = gs->GetRandomVertex(bot.getPosition(),25.f,true);
 			bot.getSteering()->NewPath(std::move(this->gs->GetPath(begin, end)));
 		}
+		break;
 	}
 	case BotState::Attacking:
 	{
@@ -712,8 +659,9 @@ void BotLogic::updateBot(RavenBot& bot)
 		const RavenBot* enemy = bot.getSteering()->getEnemy();
 		if(!enemy || !bot.IsFollowingPath()) break;
 		GridVertex* begin = this->gs->GetVertex(bot.getPosition());
-		GridVertex* end = this->gs->GetRandomVertex(enemy->getPosition(), 30.f);
+		GridVertex* end = this->gs->GetRandomVertex(enemy->getPosition(),30.f,false);
 		bot.getSteering()->NewPath(this->gs->GetPath(begin, end));
+		break;
 	}
 	case BotState::GettingAmmo:
 	{
@@ -755,7 +703,7 @@ void ItemLogic::performLogic()
 	{
 		if(item->Respawnable())
 		{
-			item->Respawn(this->gs->GetRandomVertex(item->getPosition(), 20.f)->Label().position);
+			item->Respawn(this->gs->GetRandomVertex(item->getPosition(), 40.f, false)->Label().position);
 			this->world->AddItem(item);
 		}
 		else if(!item->getVisible())

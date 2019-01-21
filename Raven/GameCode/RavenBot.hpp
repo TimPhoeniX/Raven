@@ -257,12 +257,12 @@ public:
 
 	bool CanFireRG() const
 	{
-		return this->rgCD < 0;
+		return this->rgCD < 0.f;
 	}
 
 	bool CanFireRL() const
 	{
-		return this->rlCD < 0;
+		return this->rlCD < 0.f;
 	}
 
 	bool IsFollowingPath() const
@@ -278,22 +278,28 @@ public:
 			this->RailgunTrace->setVisible(false);
 	}
 
-	void FireRG()
+	bool FireRG()
 	{
-		if(this->rgAmmo > 0u)
+		if(this->rgAmmo > 0u && this->rgCD < 0.f)
 		{
+			if(this->rgAmmo == 0u) throw std::runtime_error("Bot has no Railgun Ammo!");
 			this->rgAmmo -= 1u;
 			this->rgCD = RailgunReload;
+			return true;
 		}
+		return false;
 	}
 
-	void FireRL()
+	bool FireRL()
 	{
-		if(this->rlAmmo > 0u)
+		if(this->rlAmmo > 0u && this->rlCD < 0.f)
 		{
+			if(this->rlAmmo == 0u) throw std::runtime_error("Bot has no RocketLauncher Ammo!");
 			this->rlAmmo -= 1u;
 			this->rlCD = LauncherReload;
+			return true;
 		}
+		return false;
 	}
 
 	bool IsDead() const

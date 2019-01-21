@@ -11,6 +11,9 @@ void SteeringBehavioursUpdate::performLogic()
 {
 	for(RavenBot& o : *this->objects)
 	{
+		b2Vec2 heading = o.getVelocity();
+		heading.Normalize();
+		o.setHeading(heading);
 		b2Vec2 sForce = o.getSteering()->CalculateForce();
 		sForce.Truncate(o.getMaxForce());
 		b2Vec2 acceleration = o.getMassInv() * sForce;
@@ -19,7 +22,7 @@ void SteeringBehavioursUpdate::performLogic()
 		o.setVelocity(velocity);
 		auto oldPos = o.getPosition();
 		o.setPosition(oldPos + SGE::delta_time * o.getVelocity());
-		if(o.getVelocity().LengthSquared() > 0.00000001f)
+		if(o.getVelocity().LengthSquared() > 0.01f)
 		{
 			velocity.Normalize();
 			o.setHeading(velocity);

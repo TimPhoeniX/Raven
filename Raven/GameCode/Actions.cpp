@@ -6,23 +6,6 @@
 #include "Game/sge_game.hpp"
 #include "IO/Mouse/sge_mouse.hpp"
 
-Shoot::Shoot(Aim* shootLogic): Action(true), shootLogic(shootLogic)
-{
-}
-
-void Shoot::action_begin()
-{
-}
-
-void Shoot::action_main()
-{
-	this->shootLogic->Shoot();
-}
-
-void Shoot::action_ends()
-{
-}
-
 GOTO::GOTO(SGE::Object* object): Action(false), object(object)
 {
 }

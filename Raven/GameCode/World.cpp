@@ -1,8 +1,9 @@
 #include "World.hpp"
 #include "Utilities.hpp"
+#include "Logics.hpp"
 
 World::World(float width, float height)
-	: movers(width, height), obstacles(width, height), items(width, height), walls(),
+	: movers(width, height), obstacles(width, height), items(width, height), rockets(width, height), walls(),
 	width(width), height(height), cellWidth(width / partitionX), cellHeight(height / partitionY)
 {
 	walls.reserve(4);
@@ -20,22 +21,23 @@ std::vector<SGE::Object*> World::getObstacles(RavenBot* const mover)
 
 std::vector<SGE::Object*> World::getObstacles(b2Vec2 position, float radius)
 {
-	std::vector<SGE::Object*> obs;
-	obs.reserve(5u);
-	this->obstacles.CalculateNeighbours(obs, position, radius);
-	return obs;
+	auto obs = std::move(this->obstacles.CalculateNeighbours(position, radius));
+	auto rc = std::move(this->rockets.CalculateNeighbours(position, radius));
+	std::vector<SGE::Object*> res(obs.begin(), obs.end());
+	res.insert(res.end(), rc.begin(), rc.end());
+	return res;
 }
 
 std::vector<Item*> World::getItems(RavenBot* const mover)
 {
-	std::vector<Item*> its;
-	this->items.CalculateNeighbours(its, mover->getPosition(), mover->getShape()->getRadius());
-	return its;
+	auto its = std::move(this->items.CalculateNeighbours(mover->getPosition(), mover->getShape()->getRadius()));
+	return {its.begin(), its.end()};
 }
 
-void World::getRockets(std::vector<Rocket*>& bots, const b2Vec2& position, float radius)
+std::vector<Rocket*> World::getRockets(const b2Vec2& position, float radius)
 {
-	this->obstacles.CalculateRockets(bots, position, radius);
+	auto rc = std::move(this->rockets.CalculateNeighbours(position, radius));
+	return {rc.begin(), rc.end()};
 }
 
 void World::getNeighbours(std::vector<RavenBot*>& res, RavenBot* const mover)
@@ -51,7 +53,8 @@ void World::getNeighbours(std::vector<RavenBot*>& res, RavenBot* const mover, fl
 
 void World::getNeighbours(std::vector<RavenBot*>& res, b2Vec2 position, float radius)
 {
-	this->movers.CalculateNeighbours(res, position, radius);
+	auto nb = std::move(this->movers.CalculateNeighbours(position, radius));
+	res.assign(nb.begin(), nb.end());
 }
 
 std::vector<std::pair<SGE::Object*, Edge>>& World::getWalls()
@@ -69,6 +72,11 @@ void World::AddItem(Item* i)
 	this->items.AddEntity(i);
 }
 
+void World::AddRocket(Rocket* r)
+{
+	this->rockets.AddEntity(r);
+}
+
 void World::RemoveObstacle(SGE::Object* ob)
 {
 	this->obstacles.RemoveEntity(ob);
@@ -79,14 +87,24 @@ void World::RemoveItem(Item* i)
 	this->items.RemoveEntity(i);
 }
 
+void World::RemoveRocket(Rocket* r)
+{
+	this->rockets.RemoveEntity(r);
+}
+
 void World::AddMover(RavenBot* mo)
 {
 	this->movers.AddEntity(mo);
 }
 
-void World::UpdateObstacle(SGE::Object* rocket, b2Vec2 oldPos)
+void World::UpdateObstacle(SGE::Object* obstacle, b2Vec2 oldPos)
 {
-	this->obstacles.UpdateEntity(rocket, oldPos);
+	this->obstacles.UpdateEntity(obstacle, oldPos);
+}
+
+void World::UpdateRocket(Rocket* rocket, b2Vec2 oldPos)
+{
+	this->rockets.UpdateEntity(rocket, oldPos);
 }
 
 void World::RemoveMover(RavenBot* mo)

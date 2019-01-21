@@ -16,6 +16,7 @@ class World
 protected:
 	CellSpacePartition<RavenBot, partitionX, partitionY> movers;
 	CellSpacePartition<SGE::Object, partitionX, partitionY> obstacles;
+	CellSpacePartition<Rocket, partitionX, partitionY> rockets;
 	CellSpacePartition<Item, partitionX, partitionY> items;
 	std::vector<std::pair<SGE::Object*, Edge>> walls;
 	const float width, height, cellWidth, cellHeight;
@@ -49,29 +50,26 @@ public:
 	World(float width, float height);
 
 	std::vector<SGE::Object*> getObstacles(RavenBot* const mover, float radius);
-
 	std::vector<SGE::Object*> getObstacles(RavenBot* const mover);
-
 	std::vector<SGE::Object*> getObstacles(b2Vec2 position, float radius);
 
 	void getNeighbours(std::vector<RavenBot*>& res, RavenBot* const mover);
-
 	void getNeighbours(std::vector<RavenBot*>& res, RavenBot* const mover, float radius);
-
 	void getNeighbours(std::vector<RavenBot*>& res, b2Vec2 position, float radius);
 
 	std::vector<std::pair<SGE::Object*, Edge>>& getWalls();
 
+	void AddMover(RavenBot* mo);
 	void AddObstacle(SGE::Object* ob);
 	void AddItem(Item* i);
+	void AddRocket(Rocket* r);
 
 	void RemoveObstacle(SGE::Object* ob);
 	void RemoveItem(Item* i);
-
-	void AddMover(RavenBot* mo);
+	void RemoveRocket(Rocket* r);
 
 	void UpdateObstacle(SGE::Object* rocket, b2Vec2 oldPos);
-
+	void UpdateRocket(Rocket* rocket, b2Vec2 oldPos);
 	void UpdateMover(RavenBot* mo, b2Vec2 oldPos);
 
 	void AddWall(SGE::Object* wall, Wall::WallEdge edge);
@@ -115,7 +113,7 @@ public:
 				b2Vec2 point;
 				for(auto& wall : qob->getEdges())
 				{
-					if(LineIntersection(from, from + 1000.f * direction, wall.From(), wall.To(), ip, point))
+					if(LineIntersection(from, from + 100.f * direction, wall.From(), wall.To(), ip, point))
 					{
 						if(ip < closestDist)
 						{
@@ -134,5 +132,5 @@ public:
 	Item* RaycastItem(b2Vec2 from, b2Vec2 direction, b2Vec2& hit) const;
 	void RemoveMover(RavenBot* hitObject);
 	std::vector<Item*> getItems(RavenBot* const mover);
-	void getRockets(std::vector<Rocket*>& bots, const b2Vec2& position, float radius);
+	std::vector<Rocket*> getRockets(const b2Vec2& position, float radius);
 };

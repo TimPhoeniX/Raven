@@ -21,6 +21,7 @@
 #include "QuadObject.hpp"
 #include <queue>
 #include "Graph.hpp"
+#include "Actions.hpp"
 
 class RGTrace: public SGE::Object
 {
@@ -57,7 +58,7 @@ const float DiagonalDistance::sqrt2 = sqrt(2.f);
 
 void RavenGameState::InitRandomEngine()
 {
-	this->rand = std::bind(std::uniform_int_distribution<size_t>(0, graph.VertexCount()-1), std::default_random_engine{});
+	this->rand = std::bind(std::uniform_int_distribution<size_t>(0, graph.VertexCount()-1u), std::default_random_engine{});
 }
 
 GridCell* RavenGameState::GetCell(b2Vec2 pos)
@@ -72,21 +73,42 @@ GridVertex* RavenGameState::GetVertex(b2Vec2 pos)
 	if(!res)
 	{
 		b2Vec2 dir = {-0.5f, 0.f};
+		int reset = 8;
 		while(!res)
 		{
 			res = this->GetCell(pos + dir)->vertex;
 			dir = b2Mul(b2Rot(0.25f * b2_pi), dir);
+			if(reset-- == 0)
+			{
+				reset = 8;
+				dir *= 2.f;
+			}
 		}
 	}
 	return res;
 }
-
-GridVertex* RavenGameState::GetRandomVertex(const b2Vec2& position, const float limit)
+GridVertex* RavenGameState::GetRandomVertex()
 {
 	GridVertex* res = graph[this->rand()];
-	while(b2DistanceSquared(position, res->Label().position) < limit * limit)
+	return res;
+}
+
+GridVertex* RavenGameState::GetRandomVertex(const b2Vec2& position, const float limit, bool inside = true)
+{
+	GridVertex* res = graph[this->rand()];
+	if(inside)
 	{
-		res = graph[this->rand()];
+		while(b2DistanceSquared(position, res->Label().position) > limit * limit)
+		{
+			res = graph[this->rand()];
+		}
+	}
+	else
+	{
+		while(b2DistanceSquared(position, res->Label().position) < limit * limit)
+		{
+			res = graph[this->rand()];
+		}
 	}
 	return res;
 }
@@ -110,16 +132,32 @@ void RavenGameState::NewRocket(b2Vec2 pos, b2Vec2 direction)
 {
 	direction.Normalize();
 	Rocket* rocket = new Rocket(pos + 0.5f * direction, direction);
-	this->world->AddObstacle(rocket);
+	this->world->AddRocket(rocket);
 	this->rocketBatch->addObject(rocket);
 	this->rockets.push_back(rocket);
 }
 
+void RavenGameState::AddExplosion(Rocket* rocket)
+{
+	rocket->setShape(Rocket::ExplosionShape());
+	rocket->setLayer(-0.6);
+	this->explosionBatch->addObject(rocket);
+	this->explosions.push_back(rocket);
+}
+
+
 void RavenGameState::RemoveRocket(Rocket* rocket)
 {
-	this->world->RemoveObstacle(rocket);
+	this->world->RemoveRocket(rocket);
 	this->rocketBatch->removeObject(rocket);
 	this->rockets.erase(std::find(this->rockets.begin(), this->rockets.end(), rocket));
+	this->AddExplosion(rocket);
+}
+
+void RavenGameState::RemoveExplosion(Rocket* rocket)
+{
+	this->explosionBatch->removeObject(rocket);
+	this->explosions.erase(std::find(this->explosions.begin(), this->explosions.end(), rocket));
 	delete rocket;
 }
 
@@ -128,7 +166,7 @@ void RavenGameState::GenerateItems(const size_t bots, SGE::RealSpriteBatch* batc
 {
 	for(size_t i = 0u; i < bots; ++i)
 	{
-		Item* item = new T();
+		Item* item = new T(this->GetRandomVertex()->Label().position);
 		batch->addObject(item);
 		this->items.push_back(item);
 	}
@@ -139,7 +177,7 @@ bool RavenScene::init()
 	return true;
 }
 
-constexpr size_t ObstaclesNum = 10u;
+constexpr size_t ObstaclesNum = 12u;
 
 RavenScene::RavenScene(SGE::Game* game, const char* path) : Scene(), world(Width, Height), game(game),
 path([game](const char* path)
@@ -212,17 +250,19 @@ void RavenScene::loadScene()
 	std::string cellTexPath = "Resources/Textures/cell.png";
 	std::string beamPath = "Resources/Textures/pointer.png";
 	std::string rocketPath = "Resources/Textures/rocket.png";
+	std::string explosionPath = "Resources/Textures/explosion.png";
 	std::string healthPath = "Resources/Textures/health.png";
 	std::string armorPath = "Resources/Textures/armor.png";
 	std::string rlammoPath = "Resources/Textures/rlammo.png";
 	std::string rgammoPath = "Resources/Textures/rgammo.png";
 
 	SGE::RealSpriteBatch* wallBatch = renderer->getBatch(renderer->newBatch(scaleUVProgram, lightBrickTexPath, 4, false, true));
-	SGE::RealSpriteBatch* obstacleBatch = renderer->getBatch(renderer->newBatch<QuadBatch>(QuadProgram, lightBrickTexPath, 10, false, true));
+	SGE::RealSpriteBatch* obstacleBatch = renderer->getBatch(renderer->newBatch<QuadBatch>(QuadProgram, lightBrickTexPath, 12, false, true));
 	SGE::RealSpriteBatch* botBatch = renderer->getBatch(renderer->newBatch(basicProgram, zombieTexPath, Bots));
 
 	this->gs->railBatch = renderer->getBatch(renderer->newBatch(basicProgram, beamPath, Bots));
 	this->gs->rocketBatch = renderer->getBatch(renderer->newBatch(basicProgram, rocketPath, Bots * 20u));
+	this->gs->explosionBatch = renderer->getBatch(renderer->newBatch(basicProgram, explosionPath, Bots * 20u));
 
 	SGE::RealSpriteBatch* healthBatch = renderer->getBatch(renderer->newBatch(basicProgram, healthPath, Bots));
 	SGE::RealSpriteBatch* armorBatch = renderer->getBatch(renderer->newBatch(basicProgram, armorPath, Bots));
@@ -289,19 +329,40 @@ void RavenScene::loadScene()
 	std::uniform_real_distribution<float> angle_distribution(-b2_pi, b2_pi);
 	std::mt19937 engine((std::random_device{})());
 	auto angle = std::bind(angle_distribution, engine);
-	Quad q1 = { 4.f * glm::vec2{-64.f, -64.f}, 4.f * glm::vec2{300.f, -300.f}, 4.f * glm::vec2{128.f, 400.f}, 4.f * glm::vec2{ -80.f, 128.f } };
-	SGE::Object* obstacle1 = new QuadObstacle(Width * .5f, Height * .5f, angle(), q1);
-	SGE::Object* obstacle2 = new QuadObstacle(Width * .5f + 10.f, Height * .5f, angle(), q1);
-	obBatch->addObject(obstacle1, q1);
-	obBatch->addObject(obstacle2, q1);
-	this->world.AddObstacle(obstacle1);
-	this->world.AddObstacle(obstacle2);
-	
-	this->gs->obstacles.assign({obstacle1, obstacle2});
+	constexpr float RB1 = 24.f; //Region Boundary
+	constexpr float RB2 = 10.f; //Region Boundary
+	Quad Diamond1 = {64.f * glm::vec2{-20.f, 0.f}, 64.f * glm::vec2{0, -8.f}, 64.f * glm::vec2{20.f, 0.f}, 64.f * glm::vec2{0.f, 8.f } };
+	Quad Diamond2 = {64.f * glm::vec2{-8.f, 0.f}, 64.f * glm::vec2{0, -3.f}, 64.f * glm::vec2{8.f, 0.f}, 64.f * glm::vec2{0.f, 3.f}};
+	SGE::Object* obstacle1  = new QuadObstacle(RB1,         RB1,          angle(), Diamond1);
+	SGE::Object* obstacle2  = new QuadObstacle(Width - RB1, RB1,          angle(), Diamond1);
+	SGE::Object* obstacle3  = new QuadObstacle(Width - RB1, Height - RB1, angle(), Diamond1);
+	SGE::Object* obstacle4  = new QuadObstacle(RB1,         Height - RB1, angle(), Diamond1);
+	SGE::Object* obstacle5  = new QuadObstacle(RB2,         RB2,          angle(), Diamond2);
+	SGE::Object* obstacle6  = new QuadObstacle(Width - RB2, RB2,          angle(), Diamond2);
+	SGE::Object* obstacle7  = new QuadObstacle(Width - RB2, Height - RB2, angle(), Diamond2);
+	SGE::Object* obstacle8  = new QuadObstacle(RB2,         Height - RB2, angle(), Diamond2);
+	SGE::Object* obstacle9  = new QuadObstacle(RB2,         .5f * Height, angle(), Diamond2);
+	SGE::Object* obstacle10 = new QuadObstacle(.5f * Width, RB2,          angle(), Diamond2);
+	SGE::Object* obstacle11 = new QuadObstacle(Width - RB2, .5f * Height, angle(), Diamond2);
+	SGE::Object* obstacle12 = new QuadObstacle(.5f * Width, Height - RB2, angle(), Diamond2);
+
+	for(auto ob : {obstacle1, obstacle2, obstacle3, obstacle4})
+	{
+		obBatch->addObject(ob, Diamond1);
+		this->world.AddObstacle(ob);
+		this->gs->obstacles.push_back(ob);
+	}
+
+	for(auto ob : {obstacle5, obstacle6, obstacle7, obstacle8, obstacle9, obstacle10, obstacle11, obstacle12})
+	{
+		obBatch->addObject(ob, Diamond2);
+		this->world.AddObstacle(ob);
+		this->gs->obstacles.push_back(ob);
+	}
 
 	//Grid
 //#define GraphCellDebug
-//#define GraphEdgeDebug
+#define GraphEdgeDebug
 	{
 		std::queue<GridCellBuild*> cells;
 		int intersections = 0;
@@ -445,6 +506,7 @@ void RavenScene::loadScene()
 				}
 			}
 		}
+		this->gs->InitRandomEngine();
 //#define ASTARDEBUG
 #ifdef ASTARDEBUG
 		//Test
@@ -466,47 +528,12 @@ void RavenScene::loadScene()
 #endif
 	} //!Grid
 
-	//Spawn Points
-	std::uniform_int_distribution<size_t> randWidth(3u, X/4u -3u);
-	std::uniform_int_distribution<size_t> randHeight(3u, Y/4u - 3u);
-	auto randW = std::bind(randWidth, engine);
-	auto randH = std::bind(randHeight, engine);
-	for(size_t xI = 0u; xI < 4u; ++xI)
-	{
-		for(size_t yI = 0u; yI < 4u; ++yI)
-		{
-			size_t x = xI * (X/4u), y = yI * (Y/4u);
-			GridCell* cell = nullptr;
-			int tries = 30;
-			while(!cell && tries)
-			{
-				--tries;
-				cell = &(this->gs->cells[y + randH()][x + randW()]);
-				if(cell->state == GridCell::Invalid)
-				{
-					cell = nullptr;
-				}
-			}
-			if(!tries)
-			{
-				std::cout << "No cells at" << xI << ' ' << yI << std::endl;
-				continue;
-			}
-			this->gs->spawnPoints.push_back(cell);
-		}
-	}
-	for(auto cell : this->gs->spawnPoints)
-	{
-		//graphTestBatch->addObject(new GraphCellDummy(cell->vertex->Label().position));
-	}
 	//Players
 	{
 		this->gs->bots.reserve(Bots);
-		decltype(this->gs->spawnPoints) pts = this->gs->spawnPoints;
-		std::random_shuffle(pts.begin(), pts.end());
 		for(int i = 0; i < Bots; ++i)
 		{
-			this->gs->bots.emplace_back(pts[i]->vertex->Label().position, getCircle(), &this->world);
+			this->gs->bots.emplace_back(this->gs->GetRandomVertex()->Label().position, getCircle(), &this->world);
 			RavenBot* bot = &this->gs->bots.back();
 			botBatch->addObject(bot);
 			this->world.AddMover(bot);
@@ -514,6 +541,8 @@ void RavenScene::loadScene()
 			this->gs->railBatch->addObject(bot->RailgunTrace);
 		}
 	}
+
+	//Items
 	{
 		this->gs->GenerateItems<HealthPack>(Bots, healthBatch);
 		this->gs->GenerateItems<ArmorPack>(Bots, armorBatch);
@@ -521,9 +550,6 @@ void RavenScene::loadScene()
 		this->gs->GenerateItems<RailgunAmmo>(Bots, rgammoBatch);
 	}
 	
-	
-	this->gs->InitRandomEngine();
-
 	//Logics
 	this->addLogic(new SteeringBehavioursUpdate(&this->gs->bots));
 	this->addLogic(new SeparateBots(&this->world, &this->gs->bots));

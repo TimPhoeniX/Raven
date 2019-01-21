@@ -38,10 +38,11 @@ public:
 	World* world = nullptr;
 	SGE::RealSpriteBatch* railBatch;
 	SGE::RealSpriteBatch* rocketBatch;
-	std::vector<GridCell*> spawnPoints;
+	SGE::RealSpriteBatch* explosionBatch;
 	std::vector<SGE::Object*> obstacles;
 	std::vector<RavenBot> bots;
 	std::vector<Rocket*> rockets;
+	std::vector<Rocket*> explosions;
 	std::vector<Item*> items;
 
 	void InitRandomEngine();
@@ -49,7 +50,8 @@ public:
 	GridCell* GetCell(b2Vec2 pos);
 
 	GridVertex* GetVertex(b2Vec2 pos);
-	GridVertex* GetRandomVertex(const b2Vec2& position, float x);
+	GridVertex* GetRandomVertex();
+	GridVertex* GetRandomVertex(const b2Vec2& position, const float limit, bool inside);
 	Path GetPath(GridVertex* begin, GridVertex* end);
 
 	void UseItem(Item* item);
@@ -57,7 +59,9 @@ public:
 	template<typename T>
 	void GenerateItems(const size_t bots, SGE::RealSpriteBatch* batch);
 	void NewRocket(b2Vec2 pos, b2Vec2 direction);
+	void AddExplosion(Rocket* rocket);
 	void RemoveRocket(Rocket* rocket);
+	void RemoveExplosion(Rocket* rocket);
 };
 
 class RavenScene : public SGE::Scene

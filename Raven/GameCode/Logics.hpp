@@ -99,40 +99,10 @@ public:
 	void performLogic() override;
 };
 
-class Aim : public SGE::Logic
-{
-protected:
-	World* world;
-	SGE::Object* aimer;
-	SGE::MouseObject* mouse;
-	SGE::Camera2d* cam;
-	float reload = -1.f;
-	std::size_t& counter;
-	bool fired = false;
-	SGE::Object* pointer;
-	bool aim(b2Vec2 pos, b2Vec2 target);
-public:
-	Aim(World* world, SGE::Object* aimer, SGE::MouseObject* mouse, SGE::Camera2d* cam, std::size_t& counter, SGE::Object*);
-	void performLogic() override;
-	void Shoot();
-};
-
 namespace SGE
 {
 	class Scene;
 }
-
-class WinCondition : public SGE::Logic
-{
-protected:
-	volatile size_t& zombies;
-	volatile size_t& killedZombies;
-	SGE::Scene* endGame = nullptr;
-	Player* player;
-public:
-	WinCondition(size_t& zombies, size_t& killedZombies, SGE::Scene* endGame, Player* player);
-	virtual void performLogic() override;
-};
 
 class RocketLogic: public SGE::Logic
 {
@@ -170,7 +140,7 @@ public:
 	BotLogic(World* world, RavenGameState* gs)
 		: Logic(SGE::LogicPriority::Highest), world(world), gs(gs)
 	{
-		constexpr float spread = 0.02f;
+		constexpr float spread = 0.01f;
 		randAngle = std::bind(std::uniform_real_distribution<float>{-spread * b2_pi, spread * b2_pi}, std::default_random_engine{std::random_device{}()});
 	}
 
