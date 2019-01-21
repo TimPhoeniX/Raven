@@ -193,7 +193,7 @@ public:
 	{}
 };
 
-constexpr size_t Bots = 2u;
+constexpr size_t Bots = 5u;
 
 void RavenScene::loadScene()
 {

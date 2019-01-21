@@ -20,7 +20,7 @@ enum class BotState: char
 class RavenBot: public SGE::Object
 {
 public:
-	constexpr static float RailgunReload = 10.f;
+	constexpr static float RailgunReload = 5.f;
 	constexpr static float LauncherReload = 2.f;
 	constexpr static float RailgunDamage = 100.f;
 	constexpr static float LauncherDamage = 65.f;
